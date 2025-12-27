@@ -42,7 +42,7 @@ df_stock = pd.read_csv(STOCK_FILE)
 df_log = pd.read_csv(LOG_FILE)
 
 st.set_page_config(page_title="在庫管理", layout="wide")
-st.title("📦 在庫管理システム")
+st.title("📦 在庫管理")
 
 # --- サイドバー：登録・削除 ---
 with st.sidebar:
