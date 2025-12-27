@@ -77,7 +77,7 @@ with st.sidebar:
                 st.error("GitHubへの保存に失敗しました。")
 
 # --- 4. メイン表示：在庫一覧 ---
-st.subheader("📊 在庫一覧")
+st.subheader("在庫一覧")
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
