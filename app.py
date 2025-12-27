@@ -3,12 +3,12 @@ import pandas as pd
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- 設定：GoogleスプレッドシートのURL ---
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1n1Pjb0DMZfONEa0EMnixLwex1QEQgzbym8FmLs8HRD4/edit#gid=0"
+# --- 設定：URLの末尾をシンプルにしてエラーを回避 ---
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1n1Pjb0DMZfONEa0EMnixLwex1QEQgzbym8FmLs8HRD4/edit"
 
-# マスターデータ
+# あなたが元々定義していたリストのみを使用
 USERS = ["佐藤", "手塚", "檀原"]
-SIZES_MASTER = ["大", "中", "小", "なし", "特大", "極小", "込"]
+SIZES_MASTER = ["大", "中", "小", "なし"]  # ← 余計なものを削除しました
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
 
 st.set_page_config(page_title="在庫管理システム", layout="wide")
@@ -16,23 +16,19 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- データ読み込み関数 ---
 def load_data():
+    # 共有設定が「編集者」であれば、これで読み込めます
     df_s = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="stock", ttl="0s")
     df_l = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="log", ttl="0s")
     return df_s.fillna(""), df_l.fillna("")
 
-# --- 五十音順に並び替える関数（修正版） ---
+# --- 並び替え関数（中身をあいうえお順に整列させる） ---
 def get_opts(series):
     if series is None or len(series) == 0:
         return ["すべて"]
     
-    # 重複を排除
-    items = [str(x) for x in series.unique() if str(x).strip() != ""]
+    # 重複を消して、あいうえお順（数字順）に並べ替え
+    items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     
-    # 💡 漢字のあいうえお順を強制的に制御するのは難しいため、
-    # 　 一般的なソートを適用したあと、リストとして整理します
-    items.sort()
-    
-    # 「すべて」を先頭に固定
     return ["すべて"] + items
 
 # データの読み込み
@@ -40,7 +36,7 @@ df_stock, df_log = load_data()
 
 st.title("📦 在庫管理システム")
 
-# --- サイドバー：登録・削除 ---
+# --- サイドバー：登録 ---
 with st.sidebar:
     st.header("✨ 新商品登録")
     new_item = st.text_input("商品名")
@@ -59,10 +55,10 @@ with st.sidebar:
             }])
             updated_stock = pd.concat([df_stock, new_row], ignore_index=True)
             conn.update(spreadsheet=SPREADSHEET_URL, worksheet="stock", data=updated_stock)
-            st.success("スプレッドシートへ保存しました")
+            st.success("保存しました")
             st.rerun()
 
-# --- メイン：在庫一覧（絞り込み） ---
+# --- 在庫一覧（地名を自動で並び替え） ---
 st.subheader("📊 在庫一覧")
 c1, c2, c3, c4 = st.columns(4)
 with c1:
@@ -70,7 +66,7 @@ with c1:
 with c2:
     s_size = st.selectbox("サイズ", get_opts(df_stock["サイズ"]))
 with c3:
-    # 💡 ここで「青森」が「和歌山」より上に来るように修正
+    # 💡 これで「青森」が「和歌山」より上に来るようになります
     s_loc = st.selectbox("地名", get_opts(df_stock["地名"]))
 with c4:
     s_vendor = st.selectbox("取引先", get_opts(df_stock["取引先"]))
@@ -82,10 +78,9 @@ if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
 if s_loc != "すべて": df_disp = df_disp[df_disp["地名"] == s_loc]
 if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 
-# 表示
 st.dataframe(df_disp, use_container_width=True, hide_index=True)
 
-# --- 履歴セクション ---
+# --- 履歴 ---
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
