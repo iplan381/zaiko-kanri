@@ -12,31 +12,31 @@ SIZES_MASTER = ["大", "中", "小", "なし"]
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
 
 # ファイル初期化
-if not os.path.exists(STOCK_FILE):
-    pd.DataFrame(
-        columns=[
-            "最終更新日",
-            "商品名",
-            "サイズ",
-            "地名",
-            "在庫数",
-            "アラート基準",
-            "取引先",
-        ]
-    ).to_csv(STOCK_FILE, index=False)
-if not os.path.exists(LOG_FILE):
-    pd.DataFrame(
-        columns=[
-            "日時",
-            "商品名",
-            "サイズ",
-            "地名",
-            "変動",
-            "担当者",
-            "区分",
-            "詳細・出荷先",
-        ]
-    ).to_csv(LOG_FILE, index=False)
+# if not os.path.exists(STOCK_FILE):
+#     pd.DataFrame(
+#         columns=[
+#             "最終更新日",
+#             "商品名",
+#             "サイズ",
+#             "地名",
+#             "在庫数",
+#             "アラート基準",
+#             "取引先",
+#         ]
+#     ).to_csv(STOCK_FILE, index=False)
+# if not os.path.exists(LOG_FILE):
+#     pd.DataFrame(
+#         columns=[
+#             "日時",
+#             "商品名",
+#             "サイズ",
+#             "地名",
+#             "変動",
+#             "担当者",
+#             "区分",
+#             "詳細・出荷先",
+#         ]
+#     ).to_csv(LOG_FILE, index=False)
 
 df_stock = pd.read_csv(STOCK_FILE)
 df_log = pd.read_csv(LOG_FILE)
