@@ -113,8 +113,12 @@ st.subheader("📊 在庫一覧")
 def get_opts(series):
     if series is None or series.empty:
         return ["すべて"]
-    # 五十音順に並べるだけのシンプルな設定
-    return ["すべて"] + sorted(series.unique().tolist())
+    # 1. 重複を消してリストにする
+    items = series.unique().tolist()
+    # 2. 文字列としてあいうえお順（昇順）に並べる
+    items = sorted([str(x) for x in items])
+    # 3. 先頭に「すべて」を追加する
+    return ["すべて"] + items
 
 
 c1, c2, c3, c4 = st.columns(4)
