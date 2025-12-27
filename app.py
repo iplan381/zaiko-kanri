@@ -78,14 +78,13 @@ with st.sidebar:
 st.title("📦 在庫管理")
 st.subheader("📊 在庫一覧")
 
-# 絞り込み条件（地名の手入力検索を追加）
+# 絞り込み条件（地名を検索のみに）
 c1, c2, c3, c4 = st.columns(4)
 with c1: s_item = st.selectbox("検索:商品名", get_opts(df_stock["商品名"]))
 with c2: s_size = st.selectbox("検索:サイズ", get_opts(df_stock["サイズ"]))
 with c3:
-    # 💡 地名の検索機能を強化（手入力キーワード）
-    search_loc = st.text_input("地名を検索（手入力）", placeholder="例: 青森")
-    s_loc = st.selectbox("またはプルダウンで選択", get_opts(df_stock["地名"]))
+    # 💡 地名の検索機能をキーワード入力だけに集約
+    search_loc = st.text_input("検索:地名（手入力）", placeholder="例: 青森")
 with c4: s_vendor = st.selectbox("検索:取引先", get_opts(df_stock["取引先"]))
 
 df_disp = df_stock.copy()
@@ -94,11 +93,9 @@ df_disp = df_stock.copy()
 if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
 if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
 
-# 地名の絞り込み
+# 💡 地名の絞り込み（入力がある場合のみ実行）
 if search_loc:
     df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
-elif s_loc != "すべて":
-    df_disp = df_disp[df_disp["地名"] == s_loc]
 
 if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 
