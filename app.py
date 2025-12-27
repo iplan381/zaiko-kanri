@@ -111,11 +111,10 @@ st.subheader("📊 在庫一覧")
 
 
 def get_opts(series):
-    return (
-        ["すべて"] + sorted(series.unique().tolist())
-        if not series.empty
-        else ["すべて"]
-    )
+    if series is None or series.empty:
+        return ["すべて"]
+    # 五十音順に並べるだけのシンプルな設定
+    return ["すべて"] + sorted(series.unique().tolist())
 
 
 c1, c2, c3, c4 = st.columns(4)
