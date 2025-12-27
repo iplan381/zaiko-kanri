@@ -1,50 +1,41 @@
 import streamlit as st
 import pandas as pd
-import os
 from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
-# --- 設定：ファイル名を固定 ---
-STOCK_FILE = "inventory_main.csv"
-LOG_FILE = "stock_log_main.csv"
+# --- 設定：GoogleスプレッドシートのURL ---
+# あなたのスプレッドシートURL
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1n1Pjb0DMZfONEa0EMnixLwex1QEQgzbym8FmLs8HRD4/edit#gid=0"
 
+# マスターデータの設定（必要に応じて書き換えてください）
 USERS = ["佐藤", "手塚", "檀原"]
-SIZES_MASTER = ["大", "中", "小", "なし"]
+SIZES_MASTER = ["大", "中", "小", "なし", "特大", "極小", "込"]
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
 
-# ファイル初期化
-# if not os.path.exists(STOCK_FILE):
-#     pd.DataFrame(
-#         columns=[
-#             "最終更新日",
-#             "商品名",
-#             "サイズ",
-#             "地名",
-#             "在庫数",
-#             "アラート基準",
-#             "取引先",
-#         ]
-#     ).to_csv(STOCK_FILE, index=False)
-# if not os.path.exists(LOG_FILE):
-#     pd.DataFrame(
-#         columns=[
-#             "日時",
-#             "商品名",
-#             "サイズ",
-#             "地名",
-#             "変動",
-#             "担当者",
-#             "区分",
-#             "詳細・出荷先",
-#         ]
-#     ).to_csv(LOG_FILE, index=False)
+st.set_page_config(page_title="在庫管理システム", layout="wide")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-df_stock = pd.read_csv(STOCK_FILE)
-df_log = pd.read_csv(LOG_FILE)
+# --- データ読み込み関数 ---
+def load_data():
+    # スプレッドシートから最新データを取得
+    df_s = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="stock", ttl="0s")
+    df_l = conn.read(spreadsheet=SPREADSHEET_URL, worksheet="log", ttl="0s")
+    return df_s.fillna(""), df_l.fillna("")
 
-st.set_page_config(page_title="在庫管理", layout="wide")
+# --- 五十音順に並び替える関数 ---
+def get_opts(series):
+    if series is None or len(series) == 0:
+        return ["すべて"]
+    # 重複排除 -> 文字列化 -> ソート
+    items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
+    return ["すべて"] + items
+
+# データの読み込み
+df_stock, df_log = load_data()
+
 st.title("📦 在庫管理")
 
-# --- サイドバー：登録・削除 ---
+# --- サイドバー：新商品登録 ---
 with st.sidebar:
     st.header("✨ 新商品登録")
     new_item = st.text_input("商品名")
@@ -57,97 +48,57 @@ with st.sidebar:
     if st.button("登録"):
         if new_item and new_loc:
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            new_data = pd.DataFrame(
-                [[now, new_item, new_size, new_loc, new_stock, new_alert, new_vendor]],
-                columns=df_stock.columns,
-            )
-            new_data.to_csv(STOCK_FILE, index=False, mode="a", header=False)
-            st.success("登録しました")
+            new_row = pd.DataFrame([{
+                "最終更新日": now, "商品名": new_item, "サイズ": new_size,
+                "地名": new_loc, "在庫数": new_stock, "アラート基準": new_alert, "取引先": new_vendor
+            }])
+            updated_stock = pd.concat([df_stock, new_row], ignore_index=True)
+            conn.update(spreadsheet=SPREADSHEET_URL, worksheet="stock", data=updated_stock)
+            st.success("スプレッドシートへ登録完了")
             st.rerun()
+        else:
+            st.error("商品名と地名は必須です")
 
     st.divider()
+    # 商品削除機能
     if not df_stock.empty:
         st.header("🗑 商品の削除")
         target = st.selectbox(
-            "削除対象の商品",
-            df_stock.apply(
-                lambda x: f"{x['商品名']}|{x['サイズ']}|{x['地名']}", axis=1
-            ),
+            "削除対象",
+            df_stock.apply(lambda x: f"{x['商品名']}|{x['サイズ']}|{x['地名']}", axis=1)
         )
         if st.button("商品を削除"):
             i, s, l = target.split("|")
-            df_stock = df_stock[
-                ~(
-                    (df_stock["商品名"] == i)
-                    & (df_stock["サイズ"] == s)
-                    & (df_stock["地名"] == l)
-                )
-            ]
-            df_stock.to_csv(STOCK_FILE, index=False)
+            df_stock = df_stock[~((df_stock["商品名"] == i) & (df_stock["サイズ"] == s) & (df_stock["地名"] == l))]
+            conn.update(spreadsheet=SPREADSHEET_URL, worksheet="stock", data=df_stock)
             st.rerun()
 
-    st.divider()
-    if not df_log.empty:
-        st.header("📜 履歴の削除")
-        # 履歴を新しい順に並べて、特定しやすいように情報を連結
-        df_log_sort = df_log.sort_values("日時", ascending=False)
-        target_log = st.selectbox(
-            "削除する履歴を選択",
-            df_log_sort.apply(
-                lambda x: f"{x['日時']} | {x['商品名']}({x['サイズ']}) | {x['変動']} | {x['担当者']}",
-                axis=1,
-            ),
-        )
-        if st.button("履歴を削除"):
-            # 日時をキーにして削除（日時は秒まで含んでいるため、重複の可能性は低いです）
-            t_time = target_log.split(" | ")[0]
-            df_log = df_log[df_log["日時"] != t_time]
-            df_log.to_csv(LOG_FILE, index=False)
-            st.warning("履歴を削除しました")
-            st.rerun()
-
-# --- メイン：在庫一覧 ---
+# --- メイン：在庫一覧（絞り込み） ---
 st.subheader("📊 在庫一覧")
-
-
-def get_opts(series):
-    if series is None or series.empty:
-        return ["すべて"]
-    # 1. 重複を消してリストにする
-    items = series.unique().tolist()
-    # 2. 文字列としてあいうえお順（昇順）に並べる
-    items = sorted([str(x) for x in items])
-    # 3. 先頭に「すべて」を追加する
-    return ["すべて"] + items
-
-
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     s_item = st.selectbox("商品名", get_opts(df_stock["商品名"]))
 with c2:
     s_size = st.selectbox("サイズ", get_opts(df_stock["サイズ"]))
 with c3:
+    # ここであいうえお順に並びます
     s_loc = st.selectbox("地名", get_opts(df_stock["地名"]))
 with c4:
     s_vendor = st.selectbox("取引先", get_opts(df_stock["取引先"]))
 
 df_disp = df_stock.copy()
-if s_item != "すべて":
-    df_disp = df_disp[df_disp["商品名"] == s_item]
-if s_size != "すべて":
-    df_disp = df_disp[df_disp["サイズ"] == s_size]
-if s_loc != "すべて":
-    df_disp = df_disp[df_disp["地名"] == s_loc]
-if s_vendor != "すべて":
-    df_disp = df_disp[df_disp["取引先"] == s_vendor]
+if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
+if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
+if s_loc != "すべて": df_disp = df_disp[df_disp["地名"] == s_loc]
+if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 
-
+# アラートのハイライト
 def highlight(row):
-    if row["在庫数"] <= row["アラート基準"]:
+    if float(row["在庫数"]) <= float(row["アラート基準"]):
         return ["background-color: #FF0000; color: white; font-weight: bold"] * len(row)
     return [""] * len(row)
 
-
+# テーブル表示（クリック選択可能）
 df_disp = df_disp.sort_values(["地名", "商品名"])
 selection = st.dataframe(
     df_disp.style.apply(highlight, axis=1),
@@ -157,13 +108,12 @@ selection = st.dataframe(
     selection_mode="single-row",
 )
 
-# --- 入出庫フォーム ---
+# --- 入出庫フォーム（クリックで出現） ---
 st.divider()
 selected_rows = selection.get("selection", {}).get("rows", [])
-
 if selected_rows:
     target_data = df_disp.iloc[selected_rows[0]]
-    st.subheader(f"📥 更新: {target_data['商品名']} ({target_data['サイズ']})")
+    st.subheader(f"📥 更新: {target_data['商品名']} ({target_data['サイズ']}) - {target_data['地名']}")
 
     with st.form("up_form"):
         col_a, col_b = st.columns(2)
@@ -171,41 +121,31 @@ if selected_rows:
             val = st.number_input("数量増減 (+/-)", step=1)
             user = st.selectbox("担当者", USERS)
         with col_b:
-            dest = st.selectbox(
-                "詳細", ["-", "店舗A", "店舗B", "EC倉庫", "返品", "廃棄"]
-            )
-            note = st.text_input("備考")
+            dest = st.text_input("詳細・出荷先", value="-")
+            note = st.selectbox("区分", ["更新", "入庫", "出庫", "棚卸"])
 
-        if st.form_submit_button("在庫を更新する"):
+        if st.form_submit_button("在庫を更新して保存"):
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-            # 在庫更新
-            mask = (
-                (df_stock["商品名"] == target_data["商品名"])
-                & (df_stock["サイズ"] == target_data["サイズ"])
-                & (df_stock["地名"] == target_data["地名"])
-            )
-            df_stock.loc[mask, "在庫数"] += val
+            # 在庫更新ロジック
+            mask = (df_stock["商品名"] == target_data["商品名"]) & \
+                   (df_stock["サイズ"] == target_data["サイズ"]) & \
+                   (df_stock["地名"] == target_data["地名"])
+            
+            df_stock.loc[mask, "在庫数"] = pd.to_numeric(df_stock.loc[mask, "在庫数"]) + val
             df_stock.loc[mask, "最終更新日"] = now_str
-            df_stock.to_csv(STOCK_FILE, index=False)
+            
+            # ログ作成
+            new_log = pd.DataFrame([{
+                "日時": now_str, "商品名": target_data["商品名"], "サイズ": target_data["サイズ"],
+                "地名": target_data["地名"], "変動": val, "担当者": user, "区分": note, "詳細・出荷先": dest
+            }])
+            updated_log = pd.concat([df_log, new_log], ignore_index=True)
 
-            # ログ保存（秒まで記録して削除の際の一意性を高める）
-            log_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            pd.DataFrame(
-                [
-                    [
-                        log_time,
-                        target_data["商品名"],
-                        target_data["サイズ"],
-                        target_data["地名"],
-                        val,
-                        user,
-                        "更新",
-                        dest,
-                    ]
-                ],
-                columns=pd.read_csv(LOG_FILE).columns,
-            ).to_csv(LOG_FILE, index=False, mode="a", header=False)
-            st.success("更新完了")
+            # スプレッドシート更新
+            conn.update(spreadsheet=SPREADSHEET_URL, worksheet="stock", data=df_stock)
+            conn.update(spreadsheet=SPREADSHEET_URL, worksheet="log", data=updated_log)
+            
+            st.success("スプレッドシートを更新しました！")
             st.rerun()
 else:
     st.info("💡 上の表の行をクリックすると、入出庫フォームが表示されます。")
@@ -213,36 +153,5 @@ else:
 # --- 履歴セクション ---
 st.divider()
 st.subheader("📜 入出庫履歴")
-
 if not df_log.empty:
-    lc1, lc2, lc3, lc4 = st.columns(4)
-    with lc1:
-        l_f_item = st.selectbox(
-            "商品名で履歴検索", get_opts(df_log["商品名"]), key="l_item"
-        )
-    with lc2:
-        l_f_loc = st.selectbox("地名で履歴検索", get_opts(df_log["地名"]), key="l_loc")
-    with lc3:
-        l_f_size = st.selectbox(
-            "サイズで履歴検索", get_opts(df_log["サイズ"]), key="l_size"
-        )
-    with lc4:
-        l_f_user = st.selectbox("担当者で履歴検索", ["すべて"] + USERS, key="l_user")
-
-    df_l_f = df_log.copy()
-    if l_f_item != "すべて":
-        df_l_f = df_l_f[df_l_f["商品名"] == l_f_item]
-    if l_f_loc != "すべて":
-        df_l_f = df_l_f[df_l_f["地名"] == l_f_loc]
-    if l_f_size != "すべて":
-        df_l_f = df_l_f[df_l_f["サイズ"] == l_f_size]
-    if l_f_user != "すべて":
-        df_l_f = df_l_f[df_l_f["担当者"] == l_f_user]
-
-    st.dataframe(
-        df_l_f.sort_values("日時", ascending=False),
-        use_container_width=True,
-        hide_index=True,
-    )
-else:
-    st.write("履歴はまだありません。")
+    st.dataframe(df_log.sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
