@@ -41,7 +41,7 @@ if not os.path.exists(LOG_FILE):
 df_stock = pd.read_csv(STOCK_FILE)
 df_log = pd.read_csv(LOG_FILE)
 
-st.set_page_config(page_title="在庫管理システム", layout="wide")
+st.set_page_config(page_title="在庫管理", layout="wide")
 st.title("📦 在庫管理システム")
 
 # --- サイドバー：登録・削除 ---
