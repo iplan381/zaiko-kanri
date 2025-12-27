@@ -49,7 +49,7 @@ def get_opts(series):
 def highlight_alert(row):
     # 在庫数がアラート基準以下なら背景を濃い赤、文字を白にする
     if row["在庫数"] <= row["アラート基準"]:
-        return ['background-color: #d9534f; color: white; font-weight: bold'] * len(row)
+        return ['background-color: #d9534f; color: white'] * len(row)
     return [''] * len(row)
 
 # データ読み込み
