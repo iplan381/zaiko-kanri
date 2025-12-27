@@ -50,7 +50,7 @@ def get_opts(series):
 # データの読み込み
 df_stock, current_sha = get_github_data()
 
-st.title("📦 在庫管理システム")
+st.title("📦 在庫管理")
 
 # --- 3. サイドバー：登録機能 ---
 with st.sidebar:
