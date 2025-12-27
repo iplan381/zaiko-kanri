@@ -112,7 +112,7 @@ st.subheader("📊 在庫一覧")
 
 def get_opts(series):
     return (
-        ["すべて"] + sorted(series.unique().tolist(), key=str.lower)
+        ["すべて"] + sorted(series.unique().tolist())
         if not series.empty
         else ["すべて"]
     )
