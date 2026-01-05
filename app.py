@@ -94,6 +94,7 @@ if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
 if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
 if search_loc: df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
 if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
+df_disp = df_disp.sort_values("最終更新日", ascending=False)
 
 # 💡 色付けの設定を適用
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
