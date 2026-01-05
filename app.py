@@ -162,26 +162,20 @@ if selected_data is not None:
                     st.success(f"{user_name}さん、更新しました！")
                     st.rerun()
 
-with t2:
+    with t2:
         if st.button("はい、このデータを削除します", type="primary", use_container_width=True):
-            # 💡 確実に「今選択されている行」を特定して削除する
+            # 確実に一致する行を探して削除
             mask = (df_stock["商品名"] == selected_data["商品名"]) & \
                    (df_stock["サイズ"] == selected_data["サイズ"]) & \
                    (df_stock["地名"] == selected_data["地名"])
-            
             if mask.any():
                 idx = df_stock[mask].index[0]
                 df_stock = df_stock.drop(idx)
-                
-                # GitHubを更新
-                if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Delete Item"):
-                    st.success(f"「{selected_data['商品名']}」を削除しました")
+                if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Delete"):
+                    st.success("削除しました")
                     st.rerun()
-            else:
-                st.error("エラー：削除対象のデータが見つかりませんでした。")
 else:
     st.write("💡 **一覧から行を選択すると、ここに入出庫・削除のメニューが出ます。**")
-
 # --- 6. 履歴表示 ---
 st.divider()
 st.subheader("📜 入出庫履歴")
