@@ -119,29 +119,43 @@ if selected_data is not None:
         with col3:
             new_alert_val = st.number_input("アラート基準", min_value=0, value=int(selected_data['アラート基準']))
         with col4:
-            user_name = st.selectbox("担当者", USERS)
-            if st.button("更新を確定する", type="primary", use_container_width=True):
+            # 💡 担当者の選択肢の1番目に「未選択」を追加
+            user_opts = ["-- 選択してください --"] + USERS
+            
+            # 前回選んだ名前を記憶していれば、それを初期値にする
+            default_idx = 0
+            if "last_user" in st.session_state:
+                if st.session_state.last_user in user_opts:
+                    default_idx = user_opts.index(st.session_state.last_user)
+
+            user_name = st.selectbox("担当者", user_opts, index=default_idx)
+            
+            # 💡 名前が未選択ならボタンを無効化（disabled）
+            is_disabled = (user_name == "-- 選択してください --")
+            
+            if st.button("更新を確定する", type="primary", use_container_width=True, disabled=is_disabled):
+                # 💡 選んだ名前をセッションに記憶させる
+                st.session_state.last_user = user_name
+                
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & (df_stock["サイズ"] == selected_data["サイズ"]) & (df_stock["地名"] == selected_data["地名"])].index[0]
+                idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & 
+                              (df_stock["サイズ"] == selected_data["サイズ"]) & 
+                              (df_stock["地名"] == selected_data["地名"])].index[0]
+                
                 if move_type == "入庫": df_stock.at[idx, "在庫数"] += move_qty
                 elif move_type == "出庫": df_stock.at[idx, "在庫数"] -= move_qty
+                
                 df_stock.at[idx, "アラート基準"] = new_alert_val
                 df_stock.at[idx, "最終更新日"] = now
-                log_row = pd.DataFrame([{"日時": now, "商品名": selected_data["商品名"], "サイズ": selected_data["サイズ"], "地名": selected_data["地名"], "区分": move_type if move_type != "設定のみ" else "基準変更", "数量": move_qty, "担当者": user_name}])
+                
+                log_row = pd.DataFrame([{"日時": now, "商品名": selected_data["商品名"], "サイズ": selected_data["サイズ"], 
+                                       "地名": selected_data["地名"], "区分": move_type if move_type != "設定のみ" else "基準変更", 
+                                       "数量": move_qty, "担当者": user_name}])
+                
                 if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Update") and \
                    update_github_data(FILE_PATH_LOG, pd.concat([df_log, log_row], ignore_index=True), sha_log, "Log"):
-                    st.success("更新完了！")
+                    st.success(f"{user_name}さん、更新しました！")
                     st.rerun()
-    
-    with t2:
-        if st.button("はい、このデータを削除します", type="primary"):
-            idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & (df_stock["サイズ"] == selected_data["サイズ"]) & (df_stock["地名"] == selected_data["地名"])].index[0]
-            df_stock = df_stock.drop(idx)
-            if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Delete"):
-                st.success("削除しました")
-                st.rerun()
-else:
-    st.write("💡 **一覧から行を選択すると、ここに入出庫・削除のメニューが出ます。**")
 
 # --- 6. 履歴表示 ---
 st.divider()
