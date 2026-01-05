@@ -1,6 +1,10 @@
 import streamlit as st
 import pandas as pd
-import datetime as dt
+import datetime as dt 
+
+def get_now_jst():
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
+
 import base64
 import requests
 from io import StringIO
