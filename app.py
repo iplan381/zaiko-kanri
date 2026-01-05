@@ -15,7 +15,7 @@ FILE_PATH_STOCK = "inventory_main.csv"
 FILE_PATH_LOG = "stock_log_main.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-SIZES_MASTER = ["大", "中", "小", "なし"]
+SIZES_MASTER = ["大", "中", "小", "4個入", "なし"]
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
 USERS = ["佐藤", "手塚", "檀原"]
 
