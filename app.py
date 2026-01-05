@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import datetime as dt
 import base64
 import requests
 from io import StringIO
@@ -71,7 +71,7 @@ with st.sidebar:
         if is_duplicate:
             st.error(f"❌ 重複エラー：既に登録されています。")
         elif n_item and n_loc:
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            now = get_now_jst()
             new_row = pd.DataFrame([{"最終更新日": now, "商品名": n_item, "サイズ": n_size, "地名": n_loc, "在庫数": n_stock, "アラート基準": n_alert, "取引先": n_vendor}])
             new_log = pd.DataFrame([{"日時": now, "商品名": n_item, "サイズ": n_size, "地名": n_loc, "区分": "新規登録", "数量": n_stock, "担当者": "システム"}])
             if update_github_data(FILE_PATH_STOCK, pd.concat([df_stock, new_row], ignore_index=True), sha_stock, "Add Item") and \
@@ -138,7 +138,7 @@ if selected_data is not None:
                 # 💡 選んだ名前をセッションに記憶させる
                 st.session_state.last_user = user_name
                 
-                now = datetime.now().strftime("%Y-%m-%d %H:%M")
+                now = get_now_jst()
                 idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & 
                               (df_stock["サイズ"] == selected_data["サイズ"]) & 
                               (df_stock["地名"] == selected_data["地名"])].index[0]
