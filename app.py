@@ -49,12 +49,23 @@ def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
-# 💡 色をつけるための関数（濃い赤に変更）
+# 💡 在庫列をグレーにしつつ、アラートも維持する関数
 def highlight_alert(row):
-    # 在庫数がアラート基準以下なら背景を濃い赤、文字を白にする
+    # 基本のスタイル（全列分）
+    styles = [''] * len(row)
+    
+    # 「在庫数」の列がどこにあるか探す
+    col_names = row.index.tolist()
+    stock_idx = col_names.index("在庫数")
+    
+    # 1. まず「在庫数」の列だけを薄いグレーにする
+    styles[stock_idx] = 'background-color: #f0f2f6;' 
+
+    # 2. もし在庫がアラート基準以下なら、行全体を濃い赤（文字は白）にする
     if row["在庫数"] <= row["アラート基準"]:
         return ['background-color: #d9534f; color: white'] * len(row)
-    return [''] * len(row)
+    
+    return styles
 
 # データ読み込み
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
