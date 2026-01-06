@@ -104,21 +104,21 @@ df_disp = df_disp.sort_values("最終更新日", ascending=False)
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
 # 一覧表示
-# 一覧表示（列の幅を最小限に設定）
 event = st.dataframe(
     styled_df, 
     use_container_width=True, 
     hide_index=True, 
     on_select="rerun", 
     selection_mode="single-row",
+    # 💡 個別に width を指定せず、名前だけ短くして自動調整に任せる
     column_config={
-        "最終更新日": st.column_config.TextColumn("更新日", width="small"),
-        "商品名": st.column_config.TextColumn("商品名", width="medium"),
-        "サイズ": st.column_config.TextColumn("サイズ", width="small"),
-        "地名": st.column_config.TextColumn("地名", width="small"),
-        "在庫数": st.column_config.NumberColumn("在庫", format="%d", width="small"),
-        "アラート基準": st.column_config.NumberColumn("基準", format="%d", width="small"),
-        "取引先": st.column_config.TextColumn("取引先", width="small"),
+        "最終更新日": "更新日",
+        "商品名": "商品名",
+        "サイズ": "サイズ",
+        "地名": "地名",
+        "在庫数": "在庫",
+        "アラート基準": "基準",
+        "取引先": "取引先",
     }
 )
 
