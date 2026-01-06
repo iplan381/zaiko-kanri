@@ -125,7 +125,7 @@ selected_data = df_disp.iloc[selected_rows[0]] if selected_rows else None
 if selected_data is not None:
     # 💡 在庫数を大きな文字（見出し）で表示する
     st.markdown(f"### 選択中: {selected_data['商品名']} ({selected_data['サイズ']})")
-    st.metric(label="現在の在庫数", value=f"{selected_data['在庫数']} 個") 
+    st.metric(label="現在の在庫数", value=f"{selected_data['在庫数']} c/s") 
     
     st.divider()
     t1, t2 = st.tabs(["🔄 在庫・サイズ・地名更新", "🗑️ この行を削除"])
