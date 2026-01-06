@@ -126,7 +126,7 @@ event = st.dataframe(
     selection_mode="single-row",
     column_config={
         "最終更新日": "日時",
-        "商品名": st.column_config.TextColumn("商品名", width="large"),
+        "商品名": "商品名",
         "サイズ": "サイズ",
         "地名": "地名",
         "在庫数": "在庫",
@@ -233,7 +233,7 @@ if not df_log.empty:
         hide_index=True,
         column_config={
             "日時": "日時",
-            "商品名": st.column_config.TextColumn("商品名", width="large"),
+            "商品名": "商品名",
             "サイズ": "サイズ",
             "地名": "地名",
             "区分": "区分",
