@@ -59,7 +59,7 @@ def highlight_alert(row):
     stock_idx = col_names.index("在庫数")
     
     # 1. まず「在庫数」の列だけを薄いグレーにする
-    styles[stock_idx] = 'background-color: #696969;' 
+    styles[stock_idx] = 'background-color: #151515;' 
 
     # 2. もし在庫がアラート基準以下なら、行全体を濃い赤（文字は白）にする
     if row["在庫数"] <= row["アラート基準"]:
