@@ -62,7 +62,7 @@ def highlight_alert(row):
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
 df_log, sha_log = get_github_data(FILE_PATH_LOG)
 
-# --- 3. サイドバー：新規登録 ＆ 連動設定 ---
+# --- 3. サイドバー ---
 with st.sidebar:
     st.header("✨ 新規商品登録")
     n_item = st.text_input("商品名 ")
@@ -108,9 +108,10 @@ if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 df_disp = df_disp.sort_values("最終更新日", ascending=False)
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
+# 💡 width指定を削除
 event = st.dataframe(
     styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-    column_config={"最終更新日": "日時", "商品名": st.column_config.TextColumn("商品名", width="large")}
+    column_config={"最終更新日": "日時", "在庫数": "在庫", "数量": st.column_config.NumberColumn(format="%d")}
 )
 
 # --- 5. 操作パネル ---
@@ -152,16 +153,14 @@ if selected_data is not None:
 
 # --- 6. 履歴表示 ---
 st.divider()
-# 💡 タイトルの隣に区分選択を配置
 log_title_col, log_filter_col = st.columns([1, 2])
 with log_title_col:
     st.subheader("📜 入出庫履歴")
 with log_filter_col:
-    # 横並びで選択肢を表示
     log_types = st.multiselect(
-        "表示する区分:", ["入庫", "出庫", "編集", "新規登録"], 
+        "区分:", ["入庫", "出庫", "編集", "新規登録"], 
         default=["入庫", "出庫", "編集", "新規登録"],
-        label_visibility="collapsed" # ラベルを消してスッキリさせる
+        label_visibility="collapsed"
     )
 
 if not df_log.empty:
@@ -173,8 +172,9 @@ if not df_log.empty:
         if s_size != "すべて": df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
         if search_loc.strip(): df_log_filt = df_log_filt[df_log_filt["地名"].astype(str).str.contains(search_loc, na=False)]
 
+    # 💡 履歴側もwidth指定を削除
     st.dataframe(
         df_log_filt[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]].sort_values("日時", ascending=False), 
         use_container_width=True, hide_index=True,
-        column_config={"日時": "日時", "商品名": st.column_config.TextColumn("商品名", width="large"), "数量": st.column_config.NumberColumn("数", format="%d")}
+        column_config={"日時": "日時", "数量": st.column_config.NumberColumn("数", format="%d")}
     )
