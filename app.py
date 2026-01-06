@@ -104,16 +104,30 @@ df_disp = df_disp.sort_values("最終更新日", ascending=False)
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
 # 一覧表示
-event = st.dataframe(styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+event = st.dataframe(
+    styled_df, 
+    use_container_width=True, 
+    hide_index=True, 
+    on_select="rerun", 
+    selection_mode="single-row",
+    # 💡 在庫数の列を少し広めに、数字を強調する設定
+    column_config={
+        "在庫数": st.column_config.NumberColumn("在庫数", format="%d", width="medium"),
+        "アラート基準": st.column_config.NumberColumn("基準", format="%d", width="small")
+    }
+)
 
-# --- 5. 操作パネル ---
 # --- 5. 操作パネル ---
 st.divider()
 selected_rows = event.selection.rows
 selected_data = df_disp.iloc[selected_rows[0]] if selected_rows else None
 
 if selected_data is not None:
-    st.info(f"選択中: **{selected_data['商品名']} ({selected_data['サイズ']} / {selected_data['地名']})**")
+    # 💡 在庫数を大きな文字（見出し）で表示する
+    st.markdown(f"### 選択中: {selected_data['商品名']} ({selected_data['サイズ']})")
+    st.metric(label="現在の在庫数", value=f"{selected_data['在庫数']} 個") 
+    
+    st.divider()
     t1, t2 = st.tabs(["🔄 在庫・サイズ・地名更新", "🗑️ この行を削除"])
     
     with t1:
