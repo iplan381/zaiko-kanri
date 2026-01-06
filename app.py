@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt 
-
-def get_now_jst():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
-
 import base64
 import requests
 from io import StringIO
+
+def get_now_jst():
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
 
 # --- 1. 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri" 
@@ -49,19 +48,16 @@ def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
-# 💡 在庫列をグレーにしつつ、アラートも維持する関数
+# 💡 在庫列を濃いグレーにし、アラートも維持する関数
 def highlight_alert(row):
-    # 基本のスタイル（全列分）
     styles = [''] * len(row)
-    
-    # 「在庫数」の列がどこにあるか探す
     col_names = row.index.tolist()
     stock_idx = col_names.index("在庫数")
     
-    # 1. まず「在庫数」の列だけを薄いグレーにする
-    styles[stock_idx] = 'background-color: #262730;' 
+    # 1. 在庫列をヘッダーと同じ濃いグレーにし、文字を白抜きにする
+    styles[stock_idx] = 'background-color: #262730; color: white; font-weight: bold;' 
 
-    # 2. もし在庫がアラート基準以下なら、行全体を濃い赤（文字は白）にする
+    # 2. アラート時はこちらが優先（行全体を濃い赤）
     if row["在庫数"] <= row["アラート基準"]:
         return ['background-color: #d9534f; color: white'] * len(row)
     
@@ -71,7 +67,7 @@ def highlight_alert(row):
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
 df_log, sha_log = get_github_data(FILE_PATH_LOG)
 
-# --- 3. サイドバー：新規登録 ---
+# --- 3. サイドバー：新規登録 ＆ 検索スイッチ ---
 with st.sidebar:
     st.header("✨ 新規商品登録")
     n_item = st.text_input("商品名 ")
@@ -93,9 +89,10 @@ with st.sidebar:
                update_github_data(FILE_PATH_LOG, pd.concat([df_log, new_log], ignore_index=True), sha_log, "Add Log"):
                 st.success("登録完了！")
                 st.rerun()
-                st.divider()
-                # 💡 履歴も検索条件に含めるかどうかのスイッチ
-                sync_logs = st.checkbox("履歴も検索条件で絞り込む", value=True)
+    
+    st.divider()
+    # 💡 重要：スイッチはボタンの外（サイドバー直下）に配置
+    sync_logs = st.checkbox("履歴も検索条件で絞り込む", value=True)
 
 # --- 4. メイン：在庫一覧 ---
 st.title("📦 在庫管理")
@@ -114,19 +111,16 @@ if search_loc: df_disp = df_disp[df_disp["地名"].astype(str).str.contains(sear
 if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 df_disp = df_disp.sort_values("最終更新日", ascending=False)
 
-# 💡 色付けの設定を適用
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
-# 一覧表示
 event = st.dataframe(
     styled_df, 
     use_container_width=True, 
     hide_index=True, 
     on_select="rerun", 
     selection_mode="single-row",
-    # 💡 個別に width を指定せず、名前だけ短くして自動調整に任せる
     column_config={
-        "最終更新日": "更新日",
+        "最終更新日": "日時",
         "商品名": "商品名",
         "サイズ": "サイズ",
         "地名": "地名",
@@ -142,7 +136,6 @@ selected_rows = event.selection.rows
 selected_data = df_disp.iloc[selected_rows[0]] if selected_rows else None
 
 if selected_data is not None:
-    # 💡 在庫数を大きな文字（見出し）で表示する
     st.markdown(f"### 選択中: {selected_data['商品名']} ({selected_data['サイズ']})")
     st.metric(label="現在の在庫数", value=f"{selected_data['在庫数']} c/s") 
     
@@ -150,18 +143,15 @@ if selected_data is not None:
     t1, t2 = st.tabs(["🔄 在庫・サイズ・地名更新", "🗑️ この行を削除"])
     
     with t1:
-        # 💡 地名とサイズの編集欄（ここが新機能！）
         edit_col1, edit_col2 = st.columns(2)
         with edit_col1:
             new_loc_val = st.text_input("地名を変更", value=selected_data['地名'])
         with edit_col2:
-            # 既存のサイズを選択した状態で表示
             default_size_idx = SIZES_MASTER.index(selected_data['サイズ']) if selected_data['サイズ'] in SIZES_MASTER else 0
             new_size_val = st.selectbox("サイズを変更", SIZES_MASTER, index=default_size_idx)
 
         st.divider()
 
-        # 入出庫・アラート・担当者
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             move_type = st.radio("区分", ["入庫", "出庫", "設定のみ"], horizontal=True)
@@ -182,17 +172,13 @@ if selected_data is not None:
             if st.button("更新を確定する", type="primary", use_container_width=True, disabled=is_disabled):
                 st.session_state.last_user = user_name
                 now = get_now_jst()
-                
-                # 編集前の情報で元の行を特定
                 idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & 
                               (df_stock["サイズ"] == selected_data["サイズ"]) & 
                               (df_stock["地名"] == selected_data["地名"])].index[0]
                 
-                # 在庫計算
                 if move_type == "入庫": df_stock.at[idx, "在庫数"] += move_qty
                 elif move_type == "出庫": df_stock.at[idx, "在庫数"] -= move_qty
                 
-                # 地名、サイズ、アラート基準を上書き
                 df_stock.at[idx, "地名"] = new_loc_val
                 df_stock.at[idx, "サイズ"] = new_size_val
                 df_stock.at[idx, "アラート基準"] = new_alert_val
@@ -225,17 +211,16 @@ else:
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
-    # 💡 検索条件を履歴にも適用する
     df_log_filt = df_log.copy()
+    # 💡 スイッチがONなら、上の検索条件を履歴にも適用する
     if sync_logs:
-        if s_name:
-            df_log_filt = df_log_filt[df_log_filt["商品名"].str.contains(s_name, case=False, na=False)]
+        if s_item != "すべて":
+            df_log_filt = df_log_filt[df_log_filt["商品名"] == s_item]
         if s_size != "すべて":
             df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
-        if s_loc != "すべて":
-            df_log_filt = df_log_filt[df_log_filt["地名"] == s_loc]
+        if search_loc:
+            df_log_filt = df_log_filt[df_log_filt["地名"].astype(str).str.contains(search_loc, na=False)]
 
-    # 表示する列を整理
     df_log_display = df_log_filt[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]]
     
     st.dataframe(
