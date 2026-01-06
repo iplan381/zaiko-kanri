@@ -93,6 +93,9 @@ with st.sidebar:
                update_github_data(FILE_PATH_LOG, pd.concat([df_log, new_log], ignore_index=True), sha_log, "Add Log"):
                 st.success("登録完了！")
                 st.rerun()
+                st.divider()
+                # 💡 履歴も検索条件に含めるかどうかのスイッチ
+                sync_logs = st.checkbox("履歴も検索条件で絞り込む", value=True)
 
 # --- 4. メイン：在庫一覧 ---
 st.title("📦 在庫管理")
@@ -222,15 +225,23 @@ else:
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
+    # 💡 検索条件を履歴にも適用する
+    df_log_filt = df_log.copy()
+    if sync_logs:
+        if s_name:
+            df_log_filt = df_log_filt[df_log_filt["商品名"].str.contains(s_name, case=False, na=False)]
+        if s_size != "すべて":
+            df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
+        if s_loc != "すべて":
+            df_log_filt = df_log_filt[df_log_filt["地名"] == s_loc]
+
     # 表示する列を整理
-    df_log_display = df_log[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]]
+    df_log_display = df_log_filt[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]]
     
     st.dataframe(
         df_log_display.sort_values("日時", ascending=False), 
         use_container_width=True, 
         hide_index=True,
-        # 💡 widthを指定せず、空の辞書形式で列名だけ短くする
-        # これにより、Streamlitが中身の文字幅に合わせて自動で列を詰めてくれます
         column_config={
             "日時": "日時",
             "商品名": "商品名",
