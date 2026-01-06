@@ -211,10 +211,9 @@ else:
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
-    # 💡 表示したい列（日時、商品名、サイズ、地名、担当者）だけに絞り込む
-    df_log_display = df_log[["日時", "商品名", "サイズ", "地名", "担当者"]]
+    # 💡 数量と区分（入出庫）を復活させ、不要な詳細・出荷先は除外
+    df_log_display = df_log[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]]
     
-    # 💡 データの並び替えと表示（列幅も最適化）
     st.dataframe(
         df_log_display.sort_values("日時", ascending=False), 
         use_container_width=True, 
@@ -224,6 +223,8 @@ if not df_log.empty:
             "商品名": st.column_config.TextColumn("商品名", width="medium"),
             "サイズ": st.column_config.TextColumn("サイズ", width="small"),
             "地名": st.column_config.TextColumn("地名", width="small"),
+            "区分": st.column_config.TextColumn("区分", width="small"),
+            "数量": st.column_config.NumberColumn("数量", format="%d", width="small"),
             "担当者": st.column_config.TextColumn("担当者", width="small"),
         }
     )
