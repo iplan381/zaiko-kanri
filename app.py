@@ -48,7 +48,6 @@ def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
-# 💡 在庫列の色付け設定
 def highlight_alert(row):
     styles = [''] * len(row)
     col_names = row.index.tolist()
@@ -98,7 +97,6 @@ with c2: s_size = st.selectbox("検索:サイズ", get_opts(df_stock["サイズ"
 with c3: search_loc = st.text_input("検索:地名（手入力）", placeholder="例: 青森")
 with c4: s_vendor = st.selectbox("検索:取引先", get_opts(df_stock["取引先"]))
 
-# 検索適用
 df_disp = df_stock.copy()
 if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
 if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
@@ -108,7 +106,6 @@ if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 df_disp = df_disp.sort_values("最終更新日", ascending=False)
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
-# 💡 width指定を削除
 event = st.dataframe(
     styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
     column_config={"最終更新日": "日時", "在庫数": "在庫", "数量": st.column_config.NumberColumn(format="%d")}
@@ -153,26 +150,43 @@ if selected_data is not None:
 
 # --- 6. 履歴表示 ---
 st.divider()
-log_title_col, log_filter_col = st.columns([1, 2])
-with log_title_col:
+# 💡 見出しの横に区分選択と日付選択を配置
+log_h_col1, log_h_col2, log_h_col3 = st.columns([1.5, 2, 2])
+with log_h_col1:
     st.subheader("📜 入出庫履歴")
-with log_filter_col:
+with log_h_col2:
     log_types = st.multiselect(
         "区分:", ["入庫", "出庫", "編集", "新規登録"], 
         default=["入庫", "出庫", "編集", "新規登録"],
         label_visibility="collapsed"
     )
+with log_h_col3:
+    # 日付範囲の選択
+    log_date_range = st.date_input(
+        "期間選択",
+        value=(dt.date.today() - dt.timedelta(days=7), dt.date.today()),
+        label_visibility="collapsed"
+    )
 
 if not df_log.empty:
     df_log_filt = df_log.copy()
+    
+    # 日付フィルタ
+    if len(log_date_range) == 2:
+        start_date, end_date = log_date_range
+        df_log_filt["日時_dt"] = pd.to_datetime(df_log_filt["日時"]).dt.date
+        df_log_filt = df_log_filt[(df_log_filt["日時_dt"] >= start_date) & (df_log_filt["日時_dt"] <= end_date)]
+    
+    # 区分フィルタ
     if log_types:
         df_log_filt = df_log_filt[df_log_filt["区分"].isin(log_types)]
+        
+    # 連動フィルタ
     if sync_logs:
         if s_item != "すべて": df_log_filt = df_log_filt[df_log_filt["商品名"] == s_item]
         if s_size != "すべて": df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
         if search_loc.strip(): df_log_filt = df_log_filt[df_log_filt["地名"].astype(str).str.contains(search_loc, na=False)]
 
-    # 💡 履歴側もwidth指定を削除
     st.dataframe(
         df_log_filt[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]].sort_values("日時", ascending=False), 
         use_container_width=True, hide_index=True,
