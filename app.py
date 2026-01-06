@@ -107,15 +107,28 @@ styled_df = df_disp.style.apply(highlight_alert, axis=1)
 event = st.dataframe(styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
 # --- 5. 操作パネル ---
+# --- 5. 操作パネル ---
 st.divider()
 selected_rows = event.selection.rows
 selected_data = df_disp.iloc[selected_rows[0]] if selected_rows else None
 
 if selected_data is not None:
     st.info(f"選択中: **{selected_data['商品名']} ({selected_data['サイズ']} / {selected_data['地名']})**")
-    t1, t2 = st.tabs(["🔄 在庫・アラート更新", "🗑️ この行を削除"])
+    t1, t2 = st.tabs(["🔄 在庫・サイズ・地名更新", "🗑️ この行を削除"])
     
     with t1:
+        # 💡 地名とサイズの編集欄（ここが新機能！）
+        edit_col1, edit_col2 = st.columns(2)
+        with edit_col1:
+            new_loc_val = st.text_input("地名を変更", value=selected_data['地名'])
+        with edit_col2:
+            # 既存のサイズを選択した状態で表示
+            default_size_idx = SIZES_MASTER.index(selected_data['サイズ']) if selected_data['サイズ'] in SIZES_MASTER else 0
+            new_size_val = st.selectbox("サイズを変更", SIZES_MASTER, index=default_size_idx)
+
+        st.divider()
+
+        # 入出庫・アラート・担当者
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             move_type = st.radio("区分", ["入庫", "出庫", "設定のみ"], horizontal=True)
@@ -124,47 +137,45 @@ if selected_data is not None:
         with col3:
             new_alert_val = st.number_input("アラート基準", min_value=0, value=int(selected_data['アラート基準']))
         with col4:
-            # 💡 担当者の選択肢の1番目に「未選択」を追加
             user_opts = ["-- 選択してください --"] + USERS
-            
-            # 前回選んだ名前を記憶していれば、それを初期値にする
             default_idx = 0
             if "last_user" in st.session_state:
                 if st.session_state.last_user in user_opts:
                     default_idx = user_opts.index(st.session_state.last_user)
-
             user_name = st.selectbox("担当者", user_opts, index=default_idx)
             
-            # 💡 名前が未選択ならボタンを無効化（disabled）
             is_disabled = (user_name == "-- 選択してください --")
             
             if st.button("更新を確定する", type="primary", use_container_width=True, disabled=is_disabled):
-                # 💡 選んだ名前をセッションに記憶させる
                 st.session_state.last_user = user_name
-                
                 now = get_now_jst()
+                
+                # 編集前の情報で元の行を特定
                 idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & 
                               (df_stock["サイズ"] == selected_data["サイズ"]) & 
                               (df_stock["地名"] == selected_data["地名"])].index[0]
                 
+                # 在庫計算
                 if move_type == "入庫": df_stock.at[idx, "在庫数"] += move_qty
                 elif move_type == "出庫": df_stock.at[idx, "在庫数"] -= move_qty
                 
+                # 地名、サイズ、アラート基準を上書き
+                df_stock.at[idx, "地名"] = new_loc_val
+                df_stock.at[idx, "サイズ"] = new_size_val
                 df_stock.at[idx, "アラート基準"] = new_alert_val
                 df_stock.at[idx, "最終更新日"] = now
                 
-                log_row = pd.DataFrame([{"日時": now, "商品名": selected_data["商品名"], "サイズ": selected_data["サイズ"], 
-                                       "地名": selected_data["地名"], "区分": move_type if move_type != "設定のみ" else "基準変更", 
+                log_row = pd.DataFrame([{"日時": now, "商品名": selected_data["商品名"], "サイズ": new_size_val, 
+                                       "地名": new_loc_val, "区分": move_type if move_type != "設定のみ" else "編集", 
                                        "数量": move_qty, "担当者": user_name}])
                 
-                if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Update") and \
+                if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Update/Edit") and \
                    update_github_data(FILE_PATH_LOG, pd.concat([df_log, log_row], ignore_index=True), sha_log, "Log"):
-                    st.success(f"{user_name}さん、更新しました！")
+                    st.success("編集・更新が完了しました！")
                     st.rerun()
 
     with t2:
         if st.button("はい、このデータを削除します", type="primary", use_container_width=True):
-            # 確実に一致する行を探して削除
             mask = (df_stock["商品名"] == selected_data["商品名"]) & \
                    (df_stock["サイズ"] == selected_data["サイズ"]) & \
                    (df_stock["地名"] == selected_data["地名"])
@@ -175,7 +186,8 @@ if selected_data is not None:
                     st.success("削除しました")
                     st.rerun()
 else:
-    st.write("💡 **一覧から行を選択すると、ここに入出庫・削除のメニューが出ます。**")
+    st.write("💡 **一覧から行を選択すると、ここに入出庫・サイズ編集・削除のメニューが出ます。**")
+    
 # --- 6. 履歴表示 ---
 st.divider()
 st.subheader("📜 入出庫履歴")
