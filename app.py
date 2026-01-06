@@ -48,13 +48,13 @@ def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
-# 💡 在庫列を濃いグレーにし、アラートも維持する関数
+# 💡 在庫列をヘッダーと同じ濃いグレーにする関数
 def highlight_alert(row):
     styles = [''] * len(row)
     col_names = row.index.tolist()
     stock_idx = col_names.index("在庫数")
     
-    # 1. 在庫列をヘッダーと同じ濃いグレーにし、文字を白抜きにする
+    # 1. 在庫列を濃いグレーにし、文字を白太字にする
     styles[stock_idx] = 'background-color: #262730; color: white; font-weight: bold;' 
 
     # 2. アラート時はこちらが優先（行全体を濃い赤）
@@ -67,7 +67,7 @@ def highlight_alert(row):
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
 df_log, sha_log = get_github_data(FILE_PATH_LOG)
 
-# --- 3. サイドバー：新規登録 ＆ 検索スイッチ ---
+# --- 3. サイドバー：新規登録 ＆ 絞り込みスイッチ ---
 with st.sidebar:
     st.header("✨ 新規商品登録")
     n_item = st.text_input("商品名 ")
@@ -91,7 +91,7 @@ with st.sidebar:
                 st.rerun()
     
     st.divider()
-    # 💡 重要：スイッチはボタンの外（サイドバー直下）に配置
+    # 💡 履歴絞り込みのスイッチ
     sync_logs = st.checkbox("履歴も検索条件で絞り込む", value=True)
 
 # --- 4. メイン：在庫一覧 ---
@@ -104,13 +104,18 @@ with c2: s_size = st.selectbox("検索:サイズ", get_opts(df_stock["サイズ"
 with c3: search_loc = st.text_input("検索:地名（手入力）", placeholder="例: 青森")
 with c4: s_vendor = st.selectbox("検索:取引先", get_opts(df_stock["取引先"]))
 
+# 💡 検索ロジック：空欄や「すべて」を正しく判定
 df_disp = df_stock.copy()
-if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
-if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
-if search_loc: df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
-if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
-df_disp = df_disp.sort_values("最終更新日", ascending=False)
+if s_item != "すべて": 
+    df_disp = df_disp[df_disp["商品名"] == s_item]
+if s_size != "すべて": 
+    df_disp = df_disp[df_disp["サイズ"] == s_size]
+if search_loc.strip(): 
+    df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
+if s_vendor != "すべて": 
+    df_disp = df_disp[df_disp["取引先"] == s_vendor]
 
+df_disp = df_disp.sort_values("最終更新日", ascending=False)
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
 event = st.dataframe(
@@ -121,7 +126,7 @@ event = st.dataframe(
     selection_mode="single-row",
     column_config={
         "最終更新日": "日時",
-        "商品名": "商品名",
+        "商品名": st.column_config.TextColumn("商品名", width="large"),
         "サイズ": "サイズ",
         "地名": "地名",
         "在庫数": "在庫",
@@ -212,13 +217,12 @@ st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
     df_log_filt = df_log.copy()
-    # 💡 スイッチがONなら、上の検索条件を履歴にも適用する
     if sync_logs:
         if s_item != "すべて":
             df_log_filt = df_log_filt[df_log_filt["商品名"] == s_item]
         if s_size != "すべて":
             df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
-        if search_loc:
+        if search_loc.strip():
             df_log_filt = df_log_filt[df_log_filt["地名"].astype(str).str.contains(search_loc, na=False)]
 
     df_log_display = df_log_filt[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]]
@@ -229,7 +233,7 @@ if not df_log.empty:
         hide_index=True,
         column_config={
             "日時": "日時",
-            "商品名": "商品名",
+            "商品名": st.column_config.TextColumn("商品名", width="large"),
             "サイズ": "サイズ",
             "地名": "地名",
             "区分": "区分",
