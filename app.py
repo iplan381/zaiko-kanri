@@ -133,8 +133,18 @@ if selected_data is not None:
         with col2: move_qty = st.number_input("数量", min_value=0, value=1) if move_type != "設定のみ" else 0
         with col3: new_alert_val = st.number_input("アラート基準", min_value=0, value=int(selected_data['アラート基準']))
         with col4: 
-            user_name = st.selectbox("担当者", ["-- 選択 --"] + USERS)
+            # 💡 セッション状態から前回の担当者を読み込む
+            user_list = ["-- 選択 --"] + USERS
+            default_user_idx = 0
+            if "last_user" in st.session_state and st.session_state.last_user in user_list:
+                default_user_idx = user_list.index(st.session_state.last_user)
+            
+            user_name = st.selectbox("担当者", user_list, index=default_user_idx)
+            
             if st.button("更新確定", type="primary", use_container_width=True, disabled=(user_name == "-- 選択 --")):
+                # 💡 選んだ担当者をセッションに保存
+                st.session_state.last_user = user_name
+                
                 now = get_now_jst()
                 idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & (df_stock["サイズ"] == selected_data["サイズ"]) & (df_stock["地名"] == selected_data["地名"])].index[0]
                 if move_type == "入庫": df_stock.at[idx, "在庫数"] += move_qty
@@ -150,7 +160,6 @@ if selected_data is not None:
 
 # --- 6. 履歴表示 ---
 st.divider()
-# 💡 見出しの横に区分選択と日付選択を配置
 log_h_col1, log_h_col2, log_h_col3 = st.columns([1.5, 2, 2])
 with log_h_col1:
     st.subheader("📜 入出庫履歴")
@@ -161,7 +170,6 @@ with log_h_col2:
         label_visibility="collapsed"
     )
 with log_h_col3:
-    # 日付範囲の選択
     log_date_range = st.date_input(
         "期間選択",
         value=(dt.date.today() - dt.timedelta(days=7), dt.date.today()),
@@ -171,17 +179,15 @@ with log_h_col3:
 if not df_log.empty:
     df_log_filt = df_log.copy()
     
-    # 日付フィルタ
-    if len(log_date_range) == 2:
+    # 日付フィルタ（開始・終了の両方が選択されている時のみ実行）
+    if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
         start_date, end_date = log_date_range
         df_log_filt["日時_dt"] = pd.to_datetime(df_log_filt["日時"]).dt.date
         df_log_filt = df_log_filt[(df_log_filt["日時_dt"] >= start_date) & (df_log_filt["日時_dt"] <= end_date)]
     
-    # 区分フィルタ
     if log_types:
         df_log_filt = df_log_filt[df_log_filt["区分"].isin(log_types)]
         
-    # 連動フィルタ
     if sync_logs:
         if s_item != "すべて": df_log_filt = df_log_filt[df_log_filt["商品名"] == s_item]
         if s_size != "すべて": df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
