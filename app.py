@@ -138,7 +138,7 @@ if not selected_data_list.empty:
                 col1, col2, col3, col4, col5 = st.columns([1, 1.2, 1.2, 1, 0.8])
                 
                 with col1:
-                    m_type = st.radio(f"区分_{i}", ["入庫", "出庫", "変更なし"], horizontal=True, key=f"type_{i}")
+                    m_type = st.radio("", ["入庫", "出庫", "変更なし"], horizontal=True, key=f"type_{i}")
                 with col2:
                     m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
                 with col3:
