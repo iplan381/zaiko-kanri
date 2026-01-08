@@ -48,13 +48,15 @@ def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
+# 💡 アラート背景色の設定（復活）
 def highlight_alert(row):
     styles = [''] * len(row)
     col_names = row.index.tolist()
-    stock_idx = col_names.index("在庫数")
-    styles[stock_idx] = 'background-color: #262730; color: white; font-weight: bold;' 
-    if row["在庫数"] <= row["アラート基準"]:
-        return ['background-color: #d9534f; color: white'] * len(row)
+    if "在庫数" in col_names:
+        stock_idx = col_names.index("在庫数")
+        styles[stock_idx] = 'background-color: #262730; color: white; font-weight: bold;' 
+        if row["在庫数"] <= row["アラート基準"]:
+            return ['background-color: #d9534f; color: white'] * len(row)
     return styles
 
 # データ読み込み
@@ -106,57 +108,79 @@ if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 df_disp = df_disp.sort_values("最終更新日", ascending=False)
 styled_df = df_disp.style.apply(highlight_alert, axis=1)
 
+# 💡 複数選択可能なテーブルを表示（アラート色維持）
 event = st.dataframe(
-    styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
+    styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row",
     column_config={"最終更新日": "日時", "在庫数": "在庫", "数量": st.column_config.NumberColumn(format="%d")}
 )
 
-# --- 5. 操作パネル ---
+# --- 5. 操作パネル：個別一括入力 ---
 st.divider()
-selected_rows = event.selection.rows
-selected_data = df_disp.iloc[selected_rows[0]] if selected_rows else None
+selected_indices = event.selection.rows
+selected_data_list = df_disp.iloc[selected_indices] if selected_indices else pd.DataFrame()
 
-if selected_data is not None:
-    st.markdown(f"### 選択中: {selected_data['商品名']} ({selected_data['サイズ']})")
-    st.metric(label="現在の在庫数", value=f"{selected_data['在庫数']} c/s") 
-    st.divider()
-    t1, t2 = st.tabs(["🔄 更新", "🗑️ 削除"])
-    with t1:
-        e_col1, e_col2 = st.columns(2)
-        with e_col1: new_loc_val = st.text_input("地名を変更", value=selected_data['地名'])
-        with e_col2: 
-            d_idx = SIZES_MASTER.index(selected_data['サイズ']) if selected_data['サイズ'] in SIZES_MASTER else 0
-            new_size_val = st.selectbox("サイズを変更", SIZES_MASTER, index=d_idx)
-        st.divider()
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: move_type = st.radio("区分", ["入庫", "出庫", "設定のみ"], horizontal=True)
-        with col2: move_qty = st.number_input("数量", min_value=0, value=1) if move_type != "設定のみ" else 0
-        with col3: new_alert_val = st.number_input("アラート基準", min_value=0, value=int(selected_data['アラート基準']))
-        with col4: 
-            # 💡 セッション状態から前回の担当者を読み込む
-            user_list = ["-- 選択 --"] + USERS
-            default_user_idx = 0
-            if "last_user" in st.session_state and st.session_state.last_user in user_list:
-                default_user_idx = user_list.index(st.session_state.last_user)
+if not selected_data_list.empty:
+    n_selected = len(selected_data_list)
+    st.markdown(f"### 📋 {n_selected} 件の一括操作")
+    
+    # 担当者の記憶
+    user_list = ["-- 選択 --"] + USERS
+    default_user_idx = 0
+    if "last_user" in st.session_state and st.session_state.last_user in user_list:
+        default_user_idx = user_list.index(st.session_state.last_user)
+    
+    user_name = st.selectbox("担当者を選んでから入力してください", user_list, index=default_user_idx)
+    
+    if user_name != "-- 選択 --":
+        st.info("💡 商品ごとに数量を入力してください。")
+        
+        # 💡 各商品ごとの入力欄を動的に生成
+        update_values = {}
+        for idx_in_list, row in selected_data_list.iterrows():
+            item_label = f"{row['商品名']} ({row['サイズ']} / {row['地名']})"
+            col_info, col_radio, col_qty = st.columns([2, 1, 1])
+            with col_info:
+                st.write(f"**{item_label}**")
+                st.caption(f"現在の在庫: {row['在庫数']}")
+            with col_radio:
+                m_type = st.radio(f"区分_{idx_in_list}", ["入庫", "出庫", "変更なし"], horizontal=True, label_visibility="collapsed")
+            with col_qty:
+                m_qty = st.number_input(f"数量_{idx_in_list}", min_value=0, value=0, label_visibility="collapsed")
             
-            user_name = st.selectbox("担当者", user_list, index=default_user_idx)
+            update_values[idx_in_list] = {"type": m_type, "qty": m_qty}
+            st.divider()
+        
+        if st.button("💾 全ての変更を確定する", type="primary", use_container_width=True):
+            st.session_state.last_user = user_name
+            now = get_now_jst()
+            new_logs = []
             
-            if st.button("更新確定", type="primary", use_container_width=True, disabled=(user_name == "-- 選択 --")):
-                # 💡 選んだ担当者をセッションに保存
-                st.session_state.last_user = user_name
+            for idx_in_list, vals in update_values.items():
+                if vals["type"] == "変更なし": continue
                 
-                now = get_now_jst()
-                idx = df_stock[(df_stock["商品名"] == selected_data["商品名"]) & (df_stock["サイズ"] == selected_data["サイズ"]) & (df_stock["地名"] == selected_data["地名"])].index[0]
-                if move_type == "入庫": df_stock.at[idx, "在庫数"] += move_qty
-                elif move_type == "出庫": df_stock.at[idx, "在庫数"] -= move_qty
-                df_stock.at[idx, "地名"], df_stock.at[idx, "サイズ"], df_stock.at[idx, "アラート基準"], df_stock.at[idx, "最終更新日"] = new_loc_val, new_size_val, new_alert_val, now
-                log_row = pd.DataFrame([{"日時": now, "商品名": selected_data["商品名"], "サイズ": new_size_val, "地名": new_loc_val, "区分": move_type if move_type != "設定のみ" else "編集", "数量": move_qty, "担当者": user_name}])
-                if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Update") and update_github_data(FILE_PATH_LOG, pd.concat([df_log, log_row], ignore_index=True), sha_log, "Log"):
-                    st.rerun()
-    with t2:
-        if st.button("削除実行"):
-            df_stock = df_stock.drop(df_stock[(df_stock["商品名"] == selected_data["商品名"]) & (df_stock["サイズ"] == selected_data["サイズ"]) & (df_stock["地名"] == selected_data["地名"])].index[0])
-            if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Delete"): st.rerun()
+                row = selected_data_list.loc[idx_in_list]
+                # 元のdf_stockのインデックスを探す
+                orig_idx = df_stock[(df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])].index[0]
+                
+                qty = vals["qty"]
+                if vals["type"] == "入庫":
+                    df_stock.at[orig_idx, "在庫数"] += qty
+                elif vals["type"] == "出庫":
+                    df_stock.at[orig_idx, "在庫数"] -= qty
+                
+                df_stock.at[orig_idx, "最終更新日"] = now
+                
+                if qty > 0:
+                    new_logs.append({
+                        "日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"],
+                        "区分": vals["type"], "数量": qty, "担当者": user_name
+                    })
+            
+            if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Multi Update") and \
+               (not new_logs or update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Multi Log")):
+                st.rerun()
+else:
+    st.write("💡 **表の左端で複数チェックを入れると、それぞれ違う数量で一気に入庫・出庫できます。**")
 
 # --- 6. 履歴表示 ---
 st.divider()
@@ -164,30 +188,18 @@ log_h_col1, log_h_col2, log_h_col3 = st.columns([1.5, 2, 2])
 with log_h_col1:
     st.subheader("📜 入出庫履歴")
 with log_h_col2:
-    log_types = st.multiselect(
-        "区分:", ["入庫", "出庫", "編集", "新規登録"], 
-        default=["入庫", "出庫", "編集", "新規登録"],
-        label_visibility="collapsed"
-    )
+    log_types = st.multiselect("区分:", ["入庫", "出庫", "編集", "新規登録"], default=["入庫", "出庫", "新規登録"], label_visibility="collapsed")
 with log_h_col3:
-    log_date_range = st.date_input(
-        "期間選択",
-        value=(dt.date.today() - dt.timedelta(days=7), dt.date.today()),
-        label_visibility="collapsed"
-    )
+    log_date_range = st.date_input("期間選択", value=(dt.date.today() - dt.timedelta(days=7), dt.date.today()), label_visibility="collapsed")
 
 if not df_log.empty:
     df_log_filt = df_log.copy()
-    
-    # 日付フィルタ（開始・終了の両方が選択されている時のみ実行）
     if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
         start_date, end_date = log_date_range
         df_log_filt["日時_dt"] = pd.to_datetime(df_log_filt["日時"]).dt.date
         df_log_filt = df_log_filt[(df_log_filt["日時_dt"] >= start_date) & (df_log_filt["日時_dt"] <= end_date)]
-    
     if log_types:
         df_log_filt = df_log_filt[df_log_filt["区分"].isin(log_types)]
-        
     if sync_logs:
         if s_item != "すべて": df_log_filt = df_log_filt[df_log_filt["商品名"] == s_item]
         if s_size != "すべて": df_log_filt = df_log_filt[df_log_filt["サイズ"] == s_size]
@@ -196,5 +208,5 @@ if not df_log.empty:
     st.dataframe(
         df_log_filt[["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]].sort_values("日時", ascending=False), 
         use_container_width=True, hide_index=True,
-        column_config={"日時": "日時", "数量": st.column_config.NumberColumn("数", format="%d")}
+        column_config={"数量": st.column_config.NumberColumn("数", format="%d")}
     )
