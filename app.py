@@ -129,7 +129,7 @@ if not selected_data_list.empty:
     user_name = st.selectbox("担当者を選んでください", user_list, index=default_user_idx)
     
     if user_name != "-- 選択 --":
-        st.info("💡 変更したい項目を入力してください（変更しない場合はそのまま）")
+        st.info("💡 変更したい項目を入力してください")
         
         update_payload = {}
         for i, row in selected_data_list.iterrows():
