@@ -138,7 +138,7 @@ if not selected_data_list.empty:
                 col1, col2, col3, col4, col5 = st.columns([1, 1.2, 1.2, 1, 0.8])
                 
                 with col1:
-                    m_type = st.radio("", ["入庫", "出庫", "変更なし"], horizontal=True, key=f"type_{i}")
+                    m_type = st.radio("", ["入庫", "出庫", "数量変更なし"], horizontal=True, key=f"type_{i}")
                 with col2:
                     m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
                 with col3:
@@ -153,7 +153,7 @@ if not selected_data_list.empty:
                     "alert": new_alert, "delete": is_delete, "orig_data": row
                 }
         
-        if st.button("💾 全ての変更を確定する", type="primary", use_container_width=True):
+        if st.button("🔄 全ての変更を確定する", type="primary", use_container_width=True):
             st.session_state.last_user = user_name
             now = get_now_jst()
             new_logs = []
