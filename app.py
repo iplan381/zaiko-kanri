@@ -54,7 +54,7 @@ def highlight_alert(row):
     if "在庫数" in col_names:
         stock_idx = col_names.index("在庫数")
         styles[stock_idx] = 'background-color: #262730; color: white; font-weight: bold;' 
-        if row["在庫数"] <= row["アラート基準"]:
+        if row["在庫数"] < row["アラート基準"]:
             return ['background-color: #d9534f; color: white'] * len(row)
     return styles
 
