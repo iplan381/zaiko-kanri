@@ -150,6 +150,46 @@ event = st.dataframe(
     column_config={"最終更新日": "日時", "在庫数": "在庫", "数量": st.column_config.NumberColumn(format="%d")}
 )
 
+# --- 4.5 予約リストの表示と管理 ---
+st.divider()
+st.subheader("📅 出庫予約済みのリスト")
+
+# 予約データを最新状態で取得
+df_res_view, sha_res_view = get_github_data(FILE_PATH_RESERVATION)
+
+if not df_res_view.empty:
+    # 表示用に日付型に変換
+    df_res_view["予約日"] = pd.to_datetime(df_res_view["予約日"]).dt.date
+    df_res_view = df_res_view.sort_values("予約日")
+
+    # 編集・削除用のエディタを表示
+    edited_res_df = st.data_editor(
+        df_res_view,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",  # 行の削除を可能にする
+        key="res_editor",
+        column_config={
+            "予約日": st.column_config.DateColumn("出庫予定日", format="YYYY/MM/DD", required=True),
+            "商品名": st.column_config.TextColumn("商品名", disabled=True), # 商品名は固定
+            "サイズ": st.column_config.TextColumn("サイズ", disabled=True),
+            "地名": st.column_config.TextColumn("地名", disabled=True),
+            "数量": st.column_config.NumberColumn("予約数", min_value=1, format="%d", required=True),
+            "担当者": st.column_config.SelectboxColumn("担当者", options=USERS, required=True)
+        },
+    )
+
+    # 変更があったかチェック
+    if st.button("予約リストの変更を保存する", type="secondary"):
+        # data_editorで編集・削除された結果をGitHubに反映
+        if update_github_data(FILE_PATH_RESERVATION, edited_res_df, sha_res_view, "Edit/Delete Reservations"):
+            st.success("予約リストを更新しました。")
+            st.rerun()
+            
+    st.caption("※数量や日付を直接クリックして編集できます。行を選択してキーボードの Delete キーで削除も可能です。")
+else:
+    st.info("現在、待機中の出庫予約はありません。")
+
 # --- 5. 操作パネル：一括編集 ---
 st.divider()
 selected_indices = event.selection.rows
@@ -178,7 +218,7 @@ if not selected_data_list.empty:
                     # 💡 予約出庫を追加
                     m_type = st.radio("", ["入庫", "出庫", "予約出庫", "変更なし"], horizontal=True, key=f"type_{i}", label_visibility="collapsed")
                 with col2:
-                    m_qty = st.number_input("", min_value=0, value=0, key=f"qty_{i}", label_visibility="collapsed")
+                    m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}", label_visibility="collapsed")
                 with col3:
                     # 💡 予約出庫の時は日付、それ以外は地名変更
                     if m_type == "予約出庫":
