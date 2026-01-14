@@ -135,7 +135,7 @@ if search_loc.strip(): df_disp = df_disp[df_disp["地名"].astype(str).str.conta
 if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
 
 # 表示列の整理
-disp_cols = ["最終更新日", "商品名", "サイズ", "地名", "取引先", "在庫数", "有効在庫", "アラート基準"]
+disp_cols = ["最終更新日", "商品名", "サイズ", "地名", "在庫数", "有効在庫", "アラート基準", "取引先"]
 df_show = df_disp[disp_cols].sort_values("最終更新日", ascending=False)
 styled_df = df_show.style.apply(highlight_alert, axis=1)
 
