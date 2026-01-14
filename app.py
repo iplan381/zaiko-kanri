@@ -161,14 +161,14 @@ if selected_indices:
         for i, row in selected_data_list.iterrows():
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                 col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
-                with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "変更なし"], horizontal=True, key=f"type_{i}")
+                with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫"], horizontal=True, key=f"type_{i}")
                 with col2: m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
                 with col3:
                     if m_type == "予約出庫":
                         res_date = st.date_input("予約日", value=dt.date.today() + dt.timedelta(days=1), key=f"date_{i}")
                     else:
                         new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
-                with col4: new_alert = st.number_input("基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
+                with col4: new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
                 with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
                 update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc if m_type != "予約出庫" else row['地名'], "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
 
