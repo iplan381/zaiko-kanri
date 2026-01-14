@@ -324,13 +324,12 @@ if not selected_data_list.empty:
         update_payload = {}
         for i, row in selected_data_list.iterrows():
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']}) - 現在の在庫: {row['在庫数']}", expanded=True):
-                col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1, 1, 0.5])
+                col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
                 
                 with col1:
-                    # 💡 ラベルを表示するために修正
                     m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "変更なし"], horizontal=True, key=f"type_{i}")
                 with col2:
-                    # 💡 ここが修正ポイント！label="数量" にし、label_visibilityを削除
+                    # 💡 ラベルを "数量" に設定し、非表示設定を削除しました
                     m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
                 with col3:
                     if m_type == "予約出庫":
@@ -342,7 +341,47 @@ if not selected_data_list.empty:
                 with col5:
                     is_delete = st.checkbox("削除", key=f"del_{i}")
                 
-                update_payload[i] =
+                # 💡 エラーの原因だった途切れを解消しました
+                update_payload[i] = {
+                    "type": m_type, "qty": m_qty, "loc": new_loc if m_type != "予約出庫" else row['地名'], 
+                    "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row
+                }
+        
+        if st.button("🔄 全ての変更を確定する", type="primary", use_container_width=True):
+            st.session_state.last_user = user_name
+            now = get_now_jst()
+            new_logs = []
+            new_reservations = []
+            
+            for idx_in_disp, p in update_payload.items():
+                row = p["orig_data"]
+                target_mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
+                
+                if target_mask.any():
+                    orig_idx = df_stock[target_mask].index[0]
+                    if p["delete"]:
+                        df_stock = df_stock.drop(orig_idx)
+                        new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "担当者": user_name})
+                    elif p["type"] == "予約出庫":
+                        if p["qty"] > 0:
+                            new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
+                    else:
+                        if p["type"] == "入庫": df_stock.at[orig_idx, "在庫数"] += p["qty"]
+                        elif p["type"] == "出庫": df_stock.at[orig_idx, "在庫数"] -= p["qty"]
+                        df_stock.at[orig_idx, "地名"] = p["loc"]
+                        df_stock.at[orig_idx, "アラート基準"] = p["alert"]
+                        df_stock.at[orig_idx, "最終更新日"] = now
+                        if p["qty"] > 0: new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "担当者": user_name})
+                        if p["loc"] != row["地名"]: new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "担当者": user_name})
+
+            update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update")
+            if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
+            if new_reservations:
+                df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
+                update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
+            st.rerun()
+else:
+    st.info("💡 **一覧で複数チェックを入れると、一括編集・予約・削除パネルが表示されます。**")
 
 
 # --- 5.5 予約リストの表示と管理 ---
