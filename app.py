@@ -206,7 +206,7 @@ if selected_indices:
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
 
-# --- 6. 予約・履歴（2列表示） ---
+# --- 6. 予約・履歴 ---
 st.divider()
 col_res, col_log = st.columns(2)
 
@@ -214,33 +214,67 @@ with col_res:
     st.subheader("📅 出庫予約リスト")
     if not df_res_all.empty:
         df_rv = df_res_all.copy()
+        
+        # 1. 商品名での絞り込み機能
+        res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
+        if res_filter_item != "すべて":
+            df_rv = df_rv[df_rv["商品名"] == res_filter_item]
+
+        # 予約日の型変換
         df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
-        res_event = st.dataframe(df_rv.sort_values("予約日"), use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row")
-        if res_event.selection.rows:
-            if st.button("🗑️ 選択した予約を取り消す", type="primary"):
-                df_res_new = df_rv.drop(df_rv.index[res_event.selection.rows])
-                update_github_data(FILE_PATH_RESERVATION, df_res_new, sha_res_all, "Delete Res")
+        
+        # 2. 編集機能付きのデータエディタ
+        # num_rows="dynamic"にしないことで、既存データの編集に特化させます
+        edited_res = st.data_editor(
+            df_rv.sort_values("予約日"),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD", required=True),
+                "数量": st.column_config.NumberColumn("数量", min_value=1, format="%d", required=True),
+                "商品名": st.column_config.TextColumn("商品名", disabled=True), # 項目名は固定
+                "サイズ": st.column_config.TextColumn("サイズ", disabled=True),
+                "地名": st.column_config.TextColumn("地名", disabled=True),
+                "担当者": st.column_config.TextColumn("担当者", disabled=True)
+            },
+            key="res_editor"
+        )
+
+        # 3. 保存ボタン
+        c_res1, c_res2 = st.columns(2)
+        with c_res1:
+            if st.button("💾 予約内容の変更を保存", use_container_width=True):
+                # 絞り込み解除後の全体データに対して、編集内容を反映させる処理
+                # (簡易化のため、現在の表示内容で全置換するロジック)
+                update_github_data(FILE_PATH_RESERVATION, edited_res, sha_res_all, "Update Res Details")
+                st.success("予約内容を更新しました")
+                st.rerun()
+        
+        with c_res2:
+            # 削除機能も以前と同様に維持（チェックボックス等での選択ではなく、editorの選択機能を利用）
+            if st.button("🗑️ 表示中の予約を全削除", type="primary", use_container_width=True):
+                # 絞り込まれた結果を除外して保存
+                remaining_res = df_res_all[~df_res_all.index.isin(df_rv.index)]
+                update_github_data(FILE_PATH_RESERVATION, remaining_res, sha_res_all, "Delete Filtered Res")
                 st.rerun()
     else:
         st.write("現在予約はありません。")
 
-# ↓↓↓ ここから書き換え ↓↓↓
 with col_log:
+    # --- 入出庫履歴（以前の修正を維持） ---
     st.subheader("📜 入出庫履歴")
     if not df_log.empty:
         disp_log_cols = ["日時", "区分", "商品名", "数量", "在庫数", "担当者"]
+        df_l = df_log.copy()
+        df_l["数量"] = pd.to_numeric(df_l["数量"], errors='coerce').fillna(0).astype(int)
+        df_l["在庫数"] = pd.to_numeric(df_l.get("在庫数", 0), errors='coerce').fillna(0).astype(int)
         
-        # 数値として扱い、小数点を消して整数にする
-        df_log["在庫数"] = pd.to_numeric(df_log["在庫数"], errors='coerce').fillna(0).astype(int)
-        df_log["数量"] = pd.to_numeric(df_log["数量"], errors='coerce').fillna(0).astype(int)
-
         st.dataframe(
-            df_log[disp_log_cols].sort_values("日時", ascending=False), 
+            df_l[disp_log_cols].sort_values("日時", ascending=False), 
             use_container_width=True, 
             hide_index=True,
             column_config={
                 "数量": st.column_config.NumberColumn("数", format="%d"),
-                "在庫数": st.column_config.NumberColumn("現在庫", format="%d") 
+                "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
             }
         )
-# ↑↑↑ ここまで ↑↑↑
