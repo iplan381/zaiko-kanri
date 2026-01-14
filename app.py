@@ -174,17 +174,28 @@ if not selected_data_list.empty:
                 target_mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
                 if target_mask.any():
                     orig_idx = df_stock[target_mask].index[0]
+                    
                     if p["delete"]:
                         df_stock = df_stock.drop(orig_idx)
-                        new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "担当者": user_name})
+                        new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "在庫数": 0, "担当者": user_name})
+                    
                     elif p["type"] == "予約出庫" and p["qty"] > 0:
-                        new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "在庫数": df_stock.at[oidx, "在庫数"], "担当者": user_name})
+                        new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
+                    
                     elif p["type"] != "変更なし":
                         if p["type"] == "入庫": df_stock.at[orig_idx, "在庫数"] += p["qty"]
                         elif p["type"] == "出庫": df_stock.at[orig_idx, "在庫数"] -= p["qty"]
+                        
                         df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "アラート基準"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
-                        if p["qty"] > 0: new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "担当者": user_name})
-                        if p["loc"] != row["地名"]: new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "担当者": user_name})
+                        
+                        # ★ここで最新の在庫数を取得して履歴に入れる
+                        current_stock = df_stock.at[orig_idx, "在庫数"]
+                        
+                        if p["qty"] > 0: 
+                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": current_stock, "担当者": user_name})
+                        
+                        if p["loc"] != row["地名"]: 
+                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "在庫数": current_stock, "担当者": user_name})
             update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update")
             if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
             if new_reservations:
@@ -215,12 +226,15 @@ else:
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
-    # 表示する列に「在庫数」を追加
+    # 表示する列のリスト（在庫数 を追加）
     disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
     
-    # 存在する列のみを抽出
-    existing_cols = [c for c in disp_log_cols if c in df_log.columns]
-    df_log_show = df_log[existing_cols].sort_values("日時", ascending=False)
+    # まだ CSV に 在庫数 列がない場合に備えて空の列を作る処理
+    if "在庫数" not in df_log.columns:
+        df_log["在庫数"] = ""
+
+    # 列を絞り込んで表示
+    df_log_show = df_log[[c for c in disp_log_cols if c in df_log.columns]].sort_values("日時", ascending=False)
     
     st.dataframe(
         df_log_show, 
