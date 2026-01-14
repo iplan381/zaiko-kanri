@@ -215,13 +215,19 @@ else:
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
-    # 表示する列を指定し、不要な「変動」「詳細・出荷先」を除外
-    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "担当者"]
-    df_log_show = df_log[disp_log_cols].sort_values("日時", ascending=False)
+    # 「数量」の後に「在庫数」を追加して表示
+    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
+    
+    # 存在する列のみを抽出（エラー回避のため）
+    existing_cols = [c for c in disp_log_cols if c in df_log.columns]
+    df_log_show = df_log[existing_cols].sort_values("日時", ascending=False)
     
     st.dataframe(
         df_log_show, 
         use_container_width=True, 
         hide_index=True, 
-        column_config={"数量": st.column_config.NumberColumn("数", format="%d")}
+        column_config={
+            "数量": st.column_config.NumberColumn("数", format="%d"),
+            "在庫数": st.column_config.NumberColumn("現在数", format="%d")
+        }
     )
