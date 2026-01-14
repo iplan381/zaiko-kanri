@@ -178,7 +178,7 @@ if not selected_data_list.empty:
                         df_stock = df_stock.drop(orig_idx)
                         new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "担当者": user_name})
                     elif p["type"] == "予約出庫" and p["qty"] > 0:
-                        new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
+                        new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "在庫数": df_stock.at[oidx, "在庫数"], "担当者": user_name})
                     elif p["type"] != "変更なし":
                         if p["type"] == "入庫": df_stock.at[orig_idx, "在庫数"] += p["qty"]
                         elif p["type"] == "出庫": df_stock.at[orig_idx, "在庫数"] -= p["qty"]
@@ -215,10 +215,10 @@ else:
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
-    # 「数量」の後に「在庫数」を追加して表示
+    # 表示する列に「在庫数」を追加
     disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
     
-    # 存在する列のみを抽出（エラー回避のため）
+    # 存在する列のみを抽出
     existing_cols = [c for c in disp_log_cols if c in df_log.columns]
     df_log_show = df_log[existing_cols].sort_values("日時", ascending=False)
     
@@ -228,6 +228,6 @@ if not df_log.empty:
         hide_index=True, 
         column_config={
             "数量": st.column_config.NumberColumn("数", format="%d"),
-            "在庫数": st.column_config.NumberColumn("現在数", format="%d")
+            "在庫数": st.column_config.NumberColumn("現在庫", format="%d") 
         }
     )
