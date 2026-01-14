@@ -224,10 +224,23 @@ with col_res:
     else:
         st.write("現在予約はありません。")
 
+# ↓↓↓ ここから書き換え ↓↓↓
 with col_log:
     st.subheader("📜 入出庫履歴")
     if not df_log.empty:
         disp_log_cols = ["日時", "区分", "商品名", "数量", "在庫数", "担当者"]
-        if "在庫数" not in df_log.columns: df_log["在庫数"] = ""
-        st.dataframe(df_log[disp_log_cols].sort_values("日時", ascending=False), use_container_width=True, hide_index=True,
-                     column_config={"数量": "数", "在庫数": "現在庫"})
+        
+        # 数値として扱い、小数点を消して整数にする
+        df_log["在庫数"] = pd.to_numeric(df_log["在庫数"], errors='coerce').fillna(0).astype(int)
+        df_log["数量"] = pd.to_numeric(df_log["数量"], errors='coerce').fillna(0).astype(int)
+
+        st.dataframe(
+            df_log[disp_log_cols].sort_values("日時", ascending=False), 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "数量": st.column_config.NumberColumn("数", format="%d"),
+                "在庫数": st.column_config.NumberColumn("現在庫", format="%d") 
+            }
+        )
+# ↑↑↑ ここまで ↑↑↑
