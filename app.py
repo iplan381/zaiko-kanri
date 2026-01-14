@@ -79,7 +79,6 @@ def get_opts(series):
 
 def highlight_alert(row):
     styles = [''] * len(row)
-    # アラート判定を「有効在庫」で行う
     if "有効在庫" in row.index and row["有効在庫"] < row["アラート基準"]:
         return ['background-color: #d9534f; color: white'] * len(row)
     return styles
@@ -89,6 +88,10 @@ df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
 df_log, sha_log = get_github_data(FILE_PATH_LOG)
 df_res_all, sha_res_all = get_github_data(FILE_PATH_RESERVATION)
 df_stock, df_log = process_reservations(df_stock, sha_stock, df_log, sha_log)
+
+# --- 入力キャッシュの初期化 ---
+if "edit_cache" not in st.session_state:
+    st.session_state.edit_cache = {}
 
 # --- 3. サイドバー：新規商品登録 ---
 with st.sidebar:
@@ -147,33 +150,62 @@ event = st.dataframe(
     }
 )
 
-# --- 5. 操作パネル ---
+# --- 5. 操作パネル（キャッシュ対応版） ---
 st.divider()
 selected_indices = event.selection.rows
 if selected_indices:
     selected_data_list = df_show.iloc[selected_indices]
     st.markdown(f"### 📋 {len(selected_data_list)} 件の一括操作")
-    user_list = ["-- 選択 --"] + USERS
-    user_name = st.selectbox("担当者を選んでください", user_list)
+    user_name = st.selectbox("担当者を選んでください", ["-- 選択 --"] + USERS)
     
     if user_name != "-- 選択 --":
         update_payload = {}
         for i, row in selected_data_list.iterrows():
+            # ユニークなキーを作成（商品名・サイズ・地名の組み合わせ）
+            item_key = f"{row['商品名']}_{row['サイズ']}_{row['地名']}"
+            
+            # キャッシュがなければ初期値を設定
+            if item_key not in st.session_state.edit_cache:
+                st.session_state.edit_cache[item_key] = {
+                    "type": "変更なし", "qty": 0, "loc": row['地名'], 
+                    "alt": int(row['アラート基準']), "del": False, "res_date": dt.date.today() + dt.timedelta(days=1)
+                }
+            
+            cache = st.session_state.edit_cache[item_key]
+
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                 col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
-                with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "変更なし"], horizontal=True, key=f"type_{i}")
-                with col2: m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
+                
+                # 各入力部品に on_change を設定してキャッシュを即時更新
+                with col1:
+                    type_opts = ["入庫", "出庫", "予約出庫", "変更なし"]
+                    m_type = st.radio("操作区分", type_opts, horizontal=True, 
+                                     index=type_opts.index(cache["type"]), key=f"t_{item_key}",
+                                     on_change=lambda k=item_key: st.session_state.edit_cache[k].update({"type": st.session_state[f"t_{k}"]}))
+                with col2:
+                    m_qty = st.number_input("数量", min_value=0, value=cache["qty"], key=f"q_{item_key}",
+                                           on_change=lambda k=item_key: st.session_state.edit_cache[k].update({"qty": st.session_state[f"q_{k}"]}))
                 with col3:
                     if m_type == "予約出庫":
-                        res_date = st.date_input("予約日", value=dt.date.today() + dt.timedelta(days=1), key=f"date_{i}")
+                        res_date = st.date_input("予約日", value=cache["res_date"], key=f"d_{item_key}",
+                                                on_change=lambda k=item_key: st.session_state.edit_cache[k].update({"res_date": st.session_state[f"d_{k}"]}))
                     else:
-                        new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
-                with col4: new_alert = st.number_input("基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
-                with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
-                update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc if m_type != "予約出庫" else row['地名'], "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
+                        new_loc = st.text_input("地名変更", value=cache["loc"], key=f"l_{item_key}",
+                                               on_change=lambda k=item_key: st.session_state.edit_cache[k].update({"loc": st.session_state[f"l_{k}"]}))
+                with col4:
+                    new_alert = st.number_input("基準", min_value=0, value=cache["alt"], key=f"a_{item_key}",
+                                               on_change=lambda k=item_key: st.session_state.edit_cache[k].update({"alt": st.session_state[f"a_{k}"]}))
+                with col5:
+                    is_delete = st.checkbox("削除", value=cache["del"], key=f"del_{item_key}",
+                                           on_change=lambda k=item_key: st.session_state.edit_cache[k].update({"del": st.session_state[f"del_{k}"]}))
+                
+                # 最新の値をペイロードに格納
+                update_payload[i] = {
+                    "type": m_type, "qty": m_qty, "loc": new_loc if m_type != "予約出庫" else row['地名'], 
+                    "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row
+                }
 
         if st.button("🔄 全ての変更を確定する", type="primary", use_container_width=True):
-            st.session_state.last_user = user_name
             now, new_logs, new_reservations = get_now_jst(), [], []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
@@ -189,8 +221,6 @@ if selected_indices:
                         if p["type"] == "入庫": df_stock.at[orig_idx, "在庫数"] += p["qty"]
                         elif p["type"] == "出庫": df_stock.at[orig_idx, "在庫数"] -= p["qty"]
                         df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "アラート基準"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
-                        
-                        # 最新在庫の取得
                         curr_stock = df_stock.at[orig_idx, "在庫数"]
                         if p["qty"] > 0: 
                             new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": curr_stock, "担当者": user_name})
@@ -202,6 +232,9 @@ if selected_indices:
             if new_reservations:
                 df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
                 update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
+            
+            # 完了後にキャッシュをクリア
+            st.session_state.edit_cache = {}
             st.rerun()
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
@@ -214,88 +247,56 @@ with col_res:
     st.subheader("📅 出庫予約リスト")
     if not df_res_all.empty:
         df_rv = df_res_all.copy()
-        
-        # 1. 商品名での絞り込み
         res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
         if res_filter_item != "すべて":
             df_rv = df_rv[df_rv["商品名"] == res_filter_item]
 
-        # 予約日の表示設定
         df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
-        
-        # 2. リスト表示 (on_select="rerun" で選択を検知)
         res_event = st.dataframe(
-            df_rv.sort_values("予約日"),
-            use_container_width=True,
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="multi-row",
+            df_rv.sort_values("予約日"), use_container_width=True, hide_index=True,
+            on_select="rerun", selection_mode="multi-row",
             column_config={
                 "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
                 "数量": st.column_config.NumberColumn("数量", format="%d")
             }
         )
 
-        # 3. 個別編集パネル
         selected_rows = res_event.selection.rows
         if selected_rows:
             st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_rows)}件) を編集")
-            
-            # 表示されている表 (df_rv) から、選択された行のデータを正しく取得
-            # sort_values しているので、現在の表示順で取得
             df_target = df_rv.sort_values("予約日").iloc[selected_rows]
-            
             res_updates = {}
             for i, row in df_target.iterrows():
-                # row.name が元のデータ (df_res_all) の正確なインデックス番号です
                 orig_idx = row.name
-                
                 with st.expander(f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                     c1, c2, c3 = st.columns([1.5, 1, 0.5])
-                    with c1:
-                        upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
-                    with c2:
-                        upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{orig_idx}")
-                    with c3:
-                        is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
-                    
+                    with c1: upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
+                    with c2: upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{orig_idx}")
+                    with c3: is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
                     res_updates[orig_idx] = {"date": upd_date, "qty": upd_qty, "delete": is_res_del}
 
             if st.button("✅ 予約の変更/削除を確定する", type="primary", use_container_width=True):
                 new_df_res = df_res_all.copy()
                 indices_to_drop = []
-                
                 for o_idx, val in res_updates.items():
-                    if val["delete"]:
-                        indices_to_drop.append(o_idx)
+                    if val["delete"]: indices_to_drop.append(o_idx)
                     else:
                         new_df_res.at[o_idx, "予約日"] = str(val["date"])
                         new_df_res.at[o_idx, "数量"] = val["qty"]
-                
-                if indices_to_drop:
-                    new_df_res = new_df_res.drop(indices_to_drop)
-                
+                if indices_to_drop: new_df_res = new_df_res.drop(indices_to_drop)
                 update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update Fix")
-                st.success("予約を正確に更新しました")
                 st.rerun()
-        else:
-            st.info("💡 編集・削除したい予約の左側にチェックを入れてください。")
-    else:
-        st.write("現在予約はありません。")
 
 with col_log:
-    # --- 入出庫履歴（右詰め・整数表示） ---
     st.subheader("📜 入出庫履歴")
     if not df_log.empty:
         disp_log_cols = ["日時", "区分", "商品名", "数量", "在庫数", "担当者"]
         df_l = df_log.copy()
         df_l["数量"] = pd.to_numeric(df_l["数量"], errors='coerce').fillna(0).astype(int)
         df_l["在庫数"] = pd.to_numeric(df_l.get("在庫数", 0), errors='coerce').fillna(0).astype(int)
-        
         st.dataframe(
             df_l[disp_log_cols].sort_values("日時", ascending=False), 
-            use_container_width=True, 
-            hide_index=True,
+            use_container_width=True, hide_index=True,
             column_config={
                 "数量": st.column_config.NumberColumn("数", format="%d"),
                 "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
