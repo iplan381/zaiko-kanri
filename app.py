@@ -223,57 +223,60 @@ with col_res:
         # 予約日の表示設定
         df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
         
-        # 2. チェックボックス付きのリスト表示 (on_select="rerun" で選択を検知)
+        # 2. リスト表示 (on_select="rerun" で選択を検知)
         res_event = st.dataframe(
             df_rv.sort_values("予約日"),
             use_container_width=True,
             hide_index=True,
             on_select="rerun",
-            selection_mode="multi-row", # 複数選択を可能に
+            selection_mode="multi-row",
             column_config={
                 "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
-                "数量": st.column_config.NumberColumn("数量", format="%d") # 右詰め
+                "数量": st.column_config.NumberColumn("数量", format="%d")
             }
         )
 
-        # 3. 個別編集パネル（チェックを入れた時だけ表示）
-        selected_res_indices = res_event.selection.rows
-        if selected_res_indices:
-            st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_res_indices)}件) を編集")
+        # 3. 個別編集パネル
+        selected_rows = res_event.selection.rows
+        if selected_rows:
+            st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_rows)}件) を編集")
             
-            # 選択されたデータの取得
-            selected_res_data = df_rv.iloc[selected_res_indices]
+            # 表示されている表 (df_rv) から、選択された行のデータを正しく取得
+            # sort_values しているので、現在の表示順で取得
+            df_target = df_rv.sort_values("予約日").iloc[selected_rows]
             
             res_updates = {}
-            for i, row in selected_res_data.iterrows():
-                with st.expander(f"予約: {row['商品名']} ({row['サイズ']})", expanded=True):
+            for i, row in df_target.iterrows():
+                # row.name が元のデータ (df_res_all) の正確なインデックス番号です
+                orig_idx = row.name
+                
+                with st.expander(f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                     c1, c2, c3 = st.columns([1.5, 1, 0.5])
                     with c1:
-                        upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{i}")
+                        upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
                     with c2:
-                        upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{i}")
+                        upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{orig_idx}")
                     with c3:
-                        is_res_del = st.checkbox("削除", key=f"up_res_del_{i}")
+                        is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
                     
-                    res_updates[i] = {"date": upd_date, "qty": upd_qty, "delete": is_res_del}
+                    res_updates[orig_idx] = {"date": upd_date, "qty": upd_qty, "delete": is_res_del}
 
             if st.button("✅ 予約の変更/削除を確定する", type="primary", use_container_width=True):
-                # 元の全データから更新
                 new_df_res = df_res_all.copy()
                 indices_to_drop = []
                 
-                for idx, val in res_updates.items():
+                for o_idx, val in res_updates.items():
                     if val["delete"]:
-                        indices_to_drop.append(idx)
+                        indices_to_drop.append(o_idx)
                     else:
-                        new_df_res.at[idx, "予約日"] = str(val["date"])
-                        new_df_res.at[idx, "数量"] = val["qty"]
+                        new_df_res.at[o_idx, "予約日"] = str(val["date"])
+                        new_df_res.at[o_idx, "数量"] = val["qty"]
                 
                 if indices_to_drop:
                     new_df_res = new_df_res.drop(indices_to_drop)
                 
-                update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update")
-                st.success("予約を更新しました")
+                update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update Fix")
+                st.success("予約を正確に更新しました")
                 st.rerun()
         else:
             st.info("💡 編集・削除したい予約の左側にチェックを入れてください。")
@@ -281,7 +284,7 @@ with col_res:
         st.write("現在予約はありません。")
 
 with col_log:
-    # --- 入出庫履歴（右詰め・整数表示を維持） ---
+    # --- 入出庫履歴（右詰め・整数表示） ---
     st.subheader("📜 入出庫履歴")
     if not df_log.empty:
         disp_log_cols = ["日時", "区分", "商品名", "数量", "在庫数", "担当者"]
