@@ -296,19 +296,44 @@ st.divider() # 予約と履歴の間に区切り線を入れる
 
 # --- B. 入出庫履歴 ---
 st.subheader("📜 入出庫履歴")
+
 if not df_log.empty:
-    # 表示項目に「サイズ」と「地名」を追加
-    disp_log_cols = ["日時", "区分", "商品名", "サイズ", "地名", "数量", "在庫数", "担当者"]
-    df_l = df_log.copy()
-    df_l["数量"] = pd.to_numeric(df_l["数量"], errors='coerce').fillna(0).astype(int)
-    df_l["在庫数"] = pd.to_numeric(df_l.get("在庫数", 0), errors='coerce').fillna(0).astype(int)
+    # 1. 日付フィルターの設置
+    col_log1, col_log2 = st.columns(2)
+    with col_log1:
+        # 履歴の最初と最後の日付を取得
+        df_log["日時"] = pd.to_datetime(df_log["日時"])
+        min_date = df_log["日時"].min().date()
+        max_date = df_log["日時"].max().date()
+        
+        # 日付範囲の選択
+        log_date_range = st.date_input(
+            "表示期間を選択",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            key="log_date_filter"
+        )
+
+    # 2. データの絞り込み実行
+    df_log_filtered = df_log.copy()
     
+    # date_inputが2つの日付（開始・終了）を返している場合のみ実行
+    if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
+        start_date, end_date = log_date_range
+        df_log_filtered = df_log_filtered[
+            (df_log_filtered["日時"].dt.date >= start_date) & 
+            (df_log_filtered["日時"].dt.date <= end_date)
+        ]
+
+    # 3. 履歴の表示（絞り込み後の df_log_filtered を使用）
     st.dataframe(
-        df_l[disp_log_cols].sort_values("日時", ascending=False), 
-        use_container_width=True, 
+        df_log_filtered.sort_values("日時", ascending=False),
+        use_container_width=True,
         hide_index=True,
         column_config={
-            "数量": st.column_config.NumberColumn("数", format="%d"),
-            "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
+            "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
+            "数": st.column_config.NumberColumn("数量", format="%d"),
+            "現在庫": st.column_config.NumberColumn("処理後在庫", format="%d")
         }
     )
