@@ -213,98 +213,85 @@ if selected_indices:
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
 
-# --- 6. 予約・履歴 ---
+# --- 6. 予約・履歴（縦並びに変更） ---
 st.divider()
-col_res, col_log = st.columns(2)
 
-with col_res:
-    st.subheader("📅 出庫予約リスト")
-    if not df_res_all.empty:
-        df_rv = df_res_all.copy()
+# --- A. 出庫予約リスト ---
+st.subheader("📅 出庫予約リスト")
+if not df_res_all.empty:
+    df_rv = df_res_all.copy()
+    
+    # 商品名での絞り込み
+    res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
+    if res_filter_item != "すべて":
+        df_rv = df_rv[df_rv["商品名"] == res_filter_item]
+
+    # 予約日の表示設定
+    df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
+    
+    # リスト表示
+    res_event = st.dataframe(
+        df_rv.sort_values("予約日"),
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="multi-row",
+        column_config={
+            "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
+            "数量": st.column_config.NumberColumn("数量", format="%d")
+        }
+    )
+
+    # 個別編集パネル
+    selected_rows = res_event.selection.rows
+    if selected_rows:
+        st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_rows)}件) を編集")
+        df_target = df_rv.sort_values("予約日").iloc[selected_rows]
         
-        # 1. 商品名での絞り込み
-        res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
-        if res_filter_item != "すべて":
-            df_rv = df_rv[df_rv["商品名"] == res_filter_item]
+        res_updates = {}
+        for i, row in df_target.iterrows():
+            orig_idx = row.name
+            with st.expander(f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
+                c1, c2, c3 = st.columns([1.5, 1, 0.5])
+                with c1: upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
+                with c2: upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{orig_idx}")
+                with c3: is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
+                res_updates[orig_idx] = {"date": upd_date, "qty": upd_qty, "delete": is_res_del}
 
-        # 予約日の表示設定
-        df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
-        
-        # 2. リスト表示 (on_select="rerun" で選択を検知)
-        res_event = st.dataframe(
-            df_rv.sort_values("予約日"),
-            use_container_width=True,
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="multi-row",
-            column_config={
-                "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
-                "数量": st.column_config.NumberColumn("数量", format="%d")
-            }
-        )
-
-        # 3. 個別編集パネル
-        selected_rows = res_event.selection.rows
-        if selected_rows:
-            st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_rows)}件) を編集")
-            
-            # 表示されている表 (df_rv) から、選択された行のデータを正しく取得
-            # sort_values しているので、現在の表示順で取得
-            df_target = df_rv.sort_values("予約日").iloc[selected_rows]
-            
-            res_updates = {}
-            for i, row in df_target.iterrows():
-                # row.name が元のデータ (df_res_all) の正確なインデックス番号です
-                orig_idx = row.name
-                
-                with st.expander(f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
-                    c1, c2, c3 = st.columns([1.5, 1, 0.5])
-                    with c1:
-                        upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
-                    with c2:
-                        upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{orig_idx}")
-                    with c3:
-                        is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
-                    
-                    res_updates[orig_idx] = {"date": upd_date, "qty": upd_qty, "delete": is_res_del}
-
-            if st.button("✅ 予約の変更/削除を確定する", type="primary", use_container_width=True):
-                new_df_res = df_res_all.copy()
-                indices_to_drop = []
-                
-                for o_idx, val in res_updates.items():
-                    if val["delete"]:
-                        indices_to_drop.append(o_idx)
-                    else:
-                        new_df_res.at[o_idx, "予約日"] = str(val["date"])
-                        new_df_res.at[o_idx, "数量"] = val["qty"]
-                
-                if indices_to_drop:
-                    new_df_res = new_df_res.drop(indices_to_drop)
-                
-                update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update Fix")
-                st.success("予約を正確に更新しました")
-                st.rerun()
-        else:
-            st.info("💡 編集・削除したい予約の左側にチェックを入れてください。")
+        if st.button("✅ 予約の変更/削除を確定する", type="primary", use_container_width=True):
+            new_df_res = df_res_all.copy()
+            indices_to_drop = [o_idx for o_idx, val in res_updates.items() if val["delete"]]
+            for o_idx, val in res_updates.items():
+                if not val["delete"]:
+                    new_df_res.at[o_idx, "予約日"] = str(val["date"])
+                    new_df_res.at[o_idx, "数量"] = val["qty"]
+            if indices_to_drop:
+                new_df_res = new_df_res.drop(indices_to_drop)
+            update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update Fix")
+            st.success("予約を更新しました")
+            st.rerun()
     else:
-        st.write("現在予約はありません。")
+        st.info("💡 編集・削除したい予約の左側にチェックを入れてください。")
+else:
+    st.write("現在予約はありません。")
 
-with col_log:
-    # --- 入出庫履歴（右詰め・整数表示） ---
-    st.subheader("📜 入出庫履歴")
-    if not df_log.empty:
-        disp_log_cols = ["日時", "区分", "商品名", "サイズ", "地名", "数量", "在庫数", "担当者"]
-        df_l = df_log.copy()
-        df_l["数量"] = pd.to_numeric(df_l["数量"], errors='coerce').fillna(0).astype(int)
-        df_l["在庫数"] = pd.to_numeric(df_l.get("在庫数", 0), errors='coerce').fillna(0).astype(int)
-        
-        st.dataframe(
-            df_l[disp_log_cols].sort_values("日時", ascending=False), 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "数量": st.column_config.NumberColumn("数", format="%d"),
-                "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
-            }
-        )
+st.divider() # 予約と履歴の間に区切り線を入れる
+
+# --- B. 入出庫履歴 ---
+st.subheader("📜 入出庫履歴")
+if not df_log.empty:
+    # 表示項目に「サイズ」と「地名」を追加
+    disp_log_cols = ["日時", "区分", "商品名", "サイズ", "地名", "数量", "在庫数", "担当者"]
+    df_l = df_log.copy()
+    df_l["数量"] = pd.to_numeric(df_l["数量"], errors='coerce').fillna(0).astype(int)
+    df_l["在庫数"] = pd.to_numeric(df_l.get("在庫数", 0), errors='coerce').fillna(0).astype(int)
+    
+    st.dataframe(
+        df_l[disp_log_cols].sort_values("日時", ascending=False), 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "数量": st.column_config.NumberColumn("数", format="%d"),
+            "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
+        }
+    )
