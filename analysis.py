@@ -10,7 +10,7 @@ REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_LOG = "stock_log_main.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-st.set_page_config(page_title="詳細階層分析", layout="wide")
+st.set_page_config(page_title="詳細階層分析ボード", layout="wide")
 
 def get_github_data(file_path):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
@@ -27,17 +27,17 @@ df_log_raw = get_github_data(FILE_PATH_LOG)
 st.title("📈 階層別 在庫動態分析")
 
 if not df_log_raw.empty:
-    # データ前処理
+    # --- データ前処理 ---
     df = df_log_raw.copy()
     df["日時"] = pd.to_datetime(df["日時"])
     df["年"] = df["日時"].dt.year
-    df["月"] = df["日時"].dt.month
+    df["月"] = df["日時"].dt.month.astype(str) + "月"
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
     # 出庫データのみ
     df_out = df[df["区分"].str.contains("出庫")].copy()
 
-    # --- 5段階 階層絞り込み（サイドバー） ---
+    # --- 5段階 階層絞り込み ---
     st.sidebar.header("🔍 絞り込み条件")
     
     year_list = sorted(df_out["年"].unique(), reverse=True)
@@ -68,50 +68,36 @@ if not df_log_raw.empty:
         sel_size = "すべて表示"
         sel_loc = "すべて表示"
 
-    # 最終フィルター適用
+    # フィルタリング
     df_final = df_m.copy()
-    title_parts = [f"{sel_year}年"]
-    if sel_month != "すべて表示": title_parts.append(f"{sel_month}月")
-    if sel_item != "すべて表示": df_final = df_final[df_final["商品名"] == sel_item]; title_parts.append(sel_item)
-    if sel_size != "すべて表示": df_final = df_final[df_final["サイズ"] == sel_size]; title_parts.append(sel_size)
-    if sel_loc != "すべて表示": df_final = df_final[df_final["地名"] == sel_loc]; title_parts.append(sel_loc)
-
-    display_title = " / ".join(title_parts)
+    if sel_item != "すべて表示": df_final = df_final[df_final["商品名"] == sel_item]
+    if sel_size != "すべて表示": df_final = df_final[df_final["サイズ"] == sel_size]
+    if sel_loc != "すべて表示": df_final = df_final[df_final["地名"] == sel_loc]
 
     # --- メイン表示 ---
     tab1, tab2 = st.tabs(["📊 出荷グラフ", "🔢 詳細データ一覧"])
 
     with tab1:
-        st.subheader(f"出荷状況: {display_title}")
+        st.subheader("出荷状況分析")
         if not df_final.empty:
             df_final["表示項目"] = df_final["商品名"] + " (" + df_final["サイズ"] + " / " + df_final["地名"] + ")"
+            summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=False).reset_index()
             
-            if sel_month == "すべて表示":
-                # 月ごとの集計でも、合計数量が多い順に並べる
-                summary = df_final.groupby(["月", "表示項目"])["数量"].sum().reset_index()
-                # 並び替えのための合計値を計算
-                sort_order = summary.groupby("表示項目")["数量"].sum().sort_values(ascending=False).index
-                fig = px.bar(summary, x="表示項目", y="数量", color="月", text_auto=True,
-                             title="月別の内訳 (数量順)", barmode="group",
-                             category_orders={"表示項目": sort_order})
-            else:
-                # 数量で降順ソート
-                summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=False).reset_index()
-                fig = px.bar(summary, x="表示項目", y="数量", text_auto=True,
-                             color="数量", color_continuous_scale="Viridis")
-            
+            # ★誰にでも優しい「Viridis」配色を適用
+            # 明るい黄色が高い数値、濃い紫が低い数値を表します
+            fig = px.bar(summary, x="表示項目", y="数量", text_auto=True,
+                         color="数量", color_continuous_scale="viridis")
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("該当するデータがありません。")
-
-    with tab2:
-        st.subheader("分析対象の履歴明細 (数量の多い順)")
-        if not df_final.empty:
-            # 表も数量の多い順にソート
-            view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values("数量", ascending=False)
-            st.dataframe(view_df, use_container_width=True, hide_index=True)
         else:
             st.info("データがありません。")
 
+    with tab2:
+        st.subheader("履歴明細")
+        if not df_final.empty:
+            view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values(
+                by=["数量", "地名"], ascending=[False, True]
+            )
+            st.dataframe(view_df, use_container_width=True, hide_index=True)
+
 else:
-    st.warning("履歴データが読み込めません。")
+    st.warning("データが読み込めません。")
