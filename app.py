@@ -320,8 +320,7 @@ if not df_log.empty:
     if selected_type != "すべて":
         df_log_filtered = df_log_filtered[df_log_filtered["区分"] == selected_type]
 
-    # 3. 履歴の表示
-    # 地名とサイズを含めた列設定
+   # 3. 履歴の表示
     disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
     
     st.dataframe(
@@ -330,6 +329,7 @@ if not df_log.empty:
         hide_index=True,
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
-            # 数値変換をしないため、format指定なしで表示（Noneがそのまま出ます）
+            "数量": st.column_config.NumberColumn("数", format="%d"),
+            "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
         }
     )
