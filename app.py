@@ -305,29 +305,35 @@ if not df_log.empty:
         min_date = df_log["日時"].min().date()
         max_date = df_log["日時"].max().date()
         log_date_range = st.date_input("期間選択", value=(min_date, max_date), key="log_date_filter")
-    with col_log2:
-        # 1. すべての区分を取得
-        all_types = get_opts(df_log["区分"])
-        
-        # 2. 除外したいリストを作成
+ with col_log2:
+        # 1. すべての区分を取得し、除外したい項目を取り除く
+        all_types_raw = sorted(df_log["区分"].unique())
         exclude_list = ["基準変更", "編集"]
+        # 除外リストにないものだけを候補にする（「すべて」という項目は今回不要になります）
+        selectable_types = [t for t in all_types_raw if t not in exclude_list and str(t).strip() != ""]
         
-        # 3. 除外リストに含まれないものだけを抽出（「すべて」は残す）
-        log_types = [t for t in all_types if t not in exclude_list]
-        
-        # 4. 選択肢を表示
-        selected_type = st.selectbox("区分の絞り込み", log_types, key="log_type_filter")
+        # 2. 複数選択(multiselect)に変更
+        selected_types = st.multiselect(
+            "区分の絞り込み（複数選択可）", 
+            options=selectable_types,
+            default=[], # 最初は何も選択しない（＝全表示）にしたい場合は空リスト
+            key="log_type_filter"
+        )
 
-    # 2. データの絞り込み
+    # 2. データの絞り込み実行
     df_log_filtered = df_log.copy()
+    
+    # 日付で絞り込み
     if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
         start_date, end_date = log_date_range
         df_log_filtered = df_log_filtered[
             (df_log_filtered["日時"].dt.date >= start_date) & 
             (df_log_filtered["日時"].dt.date <= end_date)
         ]
-    if selected_type != "すべて":
-        df_log_filtered = df_log_filtered[df_log_filtered["区分"] == selected_type]
+    
+    # 3. 複数選択された区分で絞り込み（選択がある場合のみ実行）
+    if selected_types:
+        df_log_filtered = df_log_filtered[df_log_filtered["区分"].isin(selected_types)]
 
    # 3. 履歴の表示
     disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
