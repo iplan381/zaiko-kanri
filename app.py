@@ -194,13 +194,13 @@ if selected_indices:
                             df_stock.at[orig_idx, "在庫数"] -= p["qty"]
                                 df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "アラート基準"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
                                 
-                                # 最新在庫の取得
-                                curr_stock = df_stock.at[orig_idx, "在庫数"]
-                                if p["qty"] > 0: 
-                                    new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": curr_stock, "担当者": user_name})
-                                if p["loc"] != row["地名"]: 
-                                    new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "在庫数": curr_stock, "担当者": user_name})
-                    
+                        # 最新在庫の取得
+                        curr_stock = df_stock.at[orig_idx, "在庫数"]
+                        if p["qty"] > 0: 
+                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": curr_stock, "担当者": user_name})
+                        if p["loc"] != row["地名"]: 
+                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "在庫数": curr_stock, "担当者": user_name})
+            
             update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update")
             if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
             if new_reservations:
