@@ -298,42 +298,51 @@ st.divider() # 予約と履歴の間に区切り線を入れる
 st.subheader("📜 入出庫履歴")
 
 if not df_log.empty:
-    # 1. 日付フィルターの設置
+    # 1. フィルターの設置（日付と区分を並べる）
     col_log1, col_log2 = st.columns(2)
+    
     with col_log1:
-        # 履歴の最初と最後の日付を取得
+        # 日付フィルター
         df_log["日時"] = pd.to_datetime(df_log["日時"])
         min_date = df_log["日時"].min().date()
         max_date = df_log["日時"].max().date()
-        
-        # 日付範囲の選択
         log_date_range = st.date_input(
-            "表示期間を選択",
+            "期間選択",
             value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
             key="log_date_filter"
         )
+
+    with col_log2:
+        # 区分フィルター
+        # 履歴にある実際の区分（入庫、出庫、調整、削除など）を自動でリストアップ
+        log_types = get_opts(df_log["区分"])
+        selected_type = st.selectbox("区分の絞り込み", log_types, key="log_type_filter")
 
     # 2. データの絞り込み実行
     df_log_filtered = df_log.copy()
     
-    # date_inputが2つの日付（開始・終了）を返している場合のみ実行
+    # 日付で絞り込み
     if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
         start_date, end_date = log_date_range
         df_log_filtered = df_log_filtered[
             (df_log_filtered["日時"].dt.date >= start_date) & 
             (df_log_filtered["日時"].dt.date <= end_date)
         ]
+    
+    # 区分で絞り込み
+    if selected_type != "すべて":
+        df_log_filtered = df_log_filtered[df_log_filtered["区分"] == selected_type]
 
-    # 3. 履歴の表示（絞り込み後の df_log_filtered を使用）
+    # 3. 履歴の表示
+    disp_log_cols = ["日時", "区分", "商品名", "サイズ", "地名", "数量", "在庫数", "担当者"]
+    
     st.dataframe(
-        df_log_filtered.sort_values("日時", ascending=False),
+        df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
         use_container_width=True,
         hide_index=True,
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
-            "数": st.column_config.NumberColumn("数量", format="%d"),
-            "現在庫": st.column_config.NumberColumn("処理後在庫", format="%d")
+            "数量": st.column_config.NumberColumn("数", format="%d"),
+            "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
         }
     )
