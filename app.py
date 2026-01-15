@@ -161,7 +161,7 @@ if selected_indices:
         for i, row in selected_data_list.iterrows():
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                 col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
-                with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫"], horizontal=True, key=f"type_{i}")
+                with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True, key=f"type_{i}")
                 with col2: m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
                 with col3:
                     if m_type == "予約出庫":
