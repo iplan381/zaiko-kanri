@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px # グラフ用
+import plotly.express as px
 import requests
 import base64
 from io import StringIO
 
-# --- 1. 設定 (管理システムと同じものを使用) ---
+# --- 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_LOG = "stock_log_main.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 st.set_page_config(page_title="在庫分析ダッシュボード", layout="wide")
 
-# --- 2. データ読み込み関数 ---
 def get_github_data(file_path):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -20,63 +19,61 @@ def get_github_data(file_path):
     if res.status_code == 200:
         content = res.json()
         csv_text = base64.b64decode(content["content"]).decode("utf-8")
-        df = pd.read_csv(StringIO(csv_text))
-        return df.fillna("")
+        return pd.read_csv(StringIO(csv_text)).fillna("")
     return pd.DataFrame()
 
-# データの取得
 df_log_raw = get_github_data(FILE_PATH_LOG)
 
 st.title("📈 在庫変動 分析ボード")
 
 if not df_log_raw.empty:
-    # --- 3. データの前処理 ---
+    # データ前処理
     df_log = df_log_raw.copy()
-    # 日時を日付型に変換
     df_log["日時"] = pd.to_datetime(df_log["日時"])
+    df_log["年"] = df_log["日時"].dt.year
+    df_log["月"] = df_log["日時"].dt.month
     df_log["年月"] = df_log["日時"].dt.strftime("%Y-%m")
-    # 数量を数値型に変換
     df_log["数量"] = pd.to_numeric(df_log["数量"], errors='coerce').fillna(0)
+    
+    # 出庫データのみ（予約含む）
+    df_out = df_log[df_log["区分"].str.contains("出庫")].copy()
 
-    # --- 4. フィルター設定 ---
-    st.sidebar.header("🔍 絞り込み")
-    selected_year = st.sidebar.selectbox("年を選択", sorted(df_log["日時"].dt.year.unique(), reverse=True))
+    # --- 1. 月ごとの出荷数（何がどれだけ出たか内訳付き） ---
+    st.subheader("📅 月別・商品別の出荷トレンド")
+    st.caption("どの月に、どの商品がどれくらい出たかを積み上げグラフで表示します。")
     
-    # 選択した年のデータに絞り込み
-    df_year = df_log[df_log["日時"].dt.year == selected_year]
+    # 月と商品名で集計
+    monthly_item_sum = df_out.groupby(["年月", "商品名"])["数量"].sum().reset_index()
     
-    # 出庫データのみ抽出（出庫・予約出庫・出庫(予約実行)）
-    df_out = df_year[df_year["区分"].str.contains("出庫")]
+    fig_monthly = px.bar(monthly_item_sum, x="年月", y="数量", color="商品名",
+                         text_auto=True, title="月別総出荷数（商品内訳）",
+                         barmode="stack") # 積み上げ形式
+    st.plotly_chart(fig_monthly, use_container_width=True)
 
-    # --- 5. メイン表示：月別の合計出庫数 ---
-    st.subheader(f"📅 {selected_year}年 月別 総出庫数")
-    
-    # 月ごとに集計
-    monthly_summary = df_out.groupby("年月")["数量"].sum().reset_index()
-    
-    # グラフ作成 (Plotly)
-    fig = px.bar(monthly_summary, x="年月", y="数量", 
-                 labels={"数量": "出庫合計数", "年月": "月"},
-                 text_auto=True,
-                 color_discrete_sequence=["#3366CC"])
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- 6. 商品別の詳細分析 ---
+    # --- 2. 別の年月との比較 ---
     st.divider()
-    col1, col2 = st.columns(2)
+    st.subheader("⚖️ 年月比較分析")
     
+    col1, col2 = st.columns(2)
     with col1:
-        st.subheader("📦 商品別 出庫ランキング")
-        item_summary = df_out.groupby("商品名")["数量"].sum().sort_values(ascending=True).reset_index()
-        fig_item = px.bar(item_summary, x="数量", y="商品名", orientation='h',
-                          text_auto=True, color="数量", color_continuous_scale="Blues")
-        st.plotly_chart(fig_item, use_container_width=True)
-
+        target_a = st.selectbox("比較対象 A", df_out["年月"].unique(), index=0)
     with col2:
-        st.subheader("👤 担当者別 作業割合")
-        user_summary = df_year.groupby("担当者").size().reset_index(name="作業件数")
-        fig_user = px.pie(user_summary, values="作業件数", names="担当者", hole=0.4)
-        st.plotly_chart(fig_user, use_container_width=True)
+        # データが1件以上ある場合、2番目を選択、なければ1番目
+        default_b = 1 if len(df_out["年月"].unique()) > 1 else 0
+        target_b = st.selectbox("比較対象 B", df_out["年月"].unique(), index=default_b)
+
+    # 比較用データの抽出
+    df_a = df_out[df_out["年月"] == target_a].groupby("商品名")["数量"].sum().reset_index()
+    df_b = df_out[df_out["年月"] == target_b].groupby("商品名")["数量"].sum().reset_index()
+    
+    # 2つのデータを結合して比較
+    df_compare = pd.merge(df_a, df_b, on="商品名", how="outer", suffixes=(f'_{target_a}', f'_{target_b}')).fillna(0)
+    
+    # 比較棒グラフ
+    fig_comp = px.bar(df_compare, x="商品名", y=[f"数量_{target_a}", f"数量_{target_b}"],
+                      barmode="group", title=f"{target_a} vs {target_b} の出荷比較",
+                      labels={"value": "出荷数", "variable": "年月"})
+    st.plotly_chart(fig_comp, use_container_width=True)
 
 else:
-    st.warning("履歴データが見つかりません。")
+    st.warning("履歴データがまだ蓄積されていないか、読み込めません。")
