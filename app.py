@@ -294,7 +294,7 @@ with col_log:
     # --- 入出庫履歴（右詰め・整数表示） ---
     st.subheader("📜 入出庫履歴")
     if not df_log.empty:
-        disp_log_cols = ["日時", "区分", "商品名", "数量", "在庫数", "担当者"]
+        disp_log_cols = ["日時", "区分", "商品名", "サイズ", "地名", "数量", "在庫数", "担当者"]
         df_l = df_log.copy()
         df_l["数量"] = pd.to_numeric(df_l["数量"], errors='coerce').fillna(0).astype(int)
         df_l["在庫数"] = pd.to_numeric(df_l.get("在庫数", 0), errors='coerce').fillna(0).astype(int)
