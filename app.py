@@ -298,7 +298,7 @@ st.divider() # 予約と履歴の間に区切り線を入れる
 st.subheader("📜 入出庫履歴")
 
 if not df_log.empty:
-    # 1. フィルター設置（以前の修正通り）
+    # 1. フィルター設置
     col_log1, col_log2 = st.columns(2)
     with col_log1:
         df_log["日時"] = pd.to_datetime(df_log["日時"])
@@ -313,25 +313,23 @@ if not df_log.empty:
     df_log_filtered = df_log.copy()
     if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
         start_date, end_date = log_date_range
-        df_log_filtered = df_log_filtered[(df_log_filtered["日時"].dt.date >= start_date) & (df_log_filtered["日時"].dt.date <= end_date)]
+        df_log_filtered = df_log_filtered[
+            (df_log_filtered["日時"].dt.date >= start_date) & 
+            (df_log_filtered["日時"].dt.date <= end_date)
+        ]
     if selected_type != "すべて":
         df_log_filtered = df_log_filtered[df_log_filtered["区分"] == selected_type]
 
-    # --- 💡 ここが「None」対策の重要ポイント ---
-    # 数値列として扱い、空欄(None)を0で埋めてから整数型(int)に変換します
-    for col in ["数量", "在庫数"]:
-        if col in df_log_filtered.columns:
-            df_log_filtered[col] = pd.to_numeric(df_log_filtered[col], errors='coerce').fillna(0).astype(int)
-
     # 3. 履歴の表示
-    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "数量", "区分", "在庫数", "担当者"]
+    # 地名とサイズを含めた列設定
+    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
+    
     st.dataframe(
         df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
         use_container_width=True,
         hide_index=True,
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
-            "数量": st.column_config.NumberColumn("数", format="%d"),
-            "在庫数": st.column_config.NumberColumn("処理後在庫", format="%d")
+            # 数値変換をしないため、format指定なしで表示（Noneがそのまま出ます）
         }
     )
