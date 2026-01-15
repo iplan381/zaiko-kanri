@@ -186,8 +186,12 @@ if selected_indices:
                     elif p["type"] == "予約出庫" and p["qty"] > 0:
                         new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
                     elif p["type"] != "変更なし":
-                        if p["type"] == "入庫": df_stock.at[orig_idx, "在庫数"] += p["qty"]
-                        elif p["type"] == "出庫": df_stock.at[orig_idx, "在庫数"] -= p["qty"]
+                if p["type"] == "入庫" or p["type"] == "調整":
+                    # 入庫、または調整（プラス入力）で在庫を増やす
+                    df_stock.at[orig_idx, "在庫数"] += p["qty"]
+                elif p["type"] == "出庫":
+                    # 出庫は常にマイナス
+                    df_stock.at[orig_idx, "在庫数"] -= p["qty"]
                         df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "アラート基準"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
                         
                         # 最新在庫の取得
