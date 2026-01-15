@@ -219,7 +219,13 @@ st.divider()
 # --- A. 出庫予約リスト ---
 st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
-    df_rv = df_res_all.copy()
+    # 予約データに在庫情報を紐付ける
+    df_rv = pd.merge(
+        df_res_all, 
+        df_disp[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], 
+        on=["商品名", "サイズ", "地名"], 
+        how="left"
+    )
     
     # 商品名での絞り込み
     res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
@@ -229,16 +235,21 @@ if not df_res_all.empty:
     # 予約日の表示設定
     df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
     
+    # 表示する列の順番を整理
+    res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "有効在庫", "担当者"]
+
     # リスト表示
     res_event = st.dataframe(
-        df_rv.sort_values("予約日"),
+        df_rv[res_disp_cols].sort_values("予約日"),
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
         selection_mode="multi-row",
         column_config={
             "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
-            "数量": st.column_config.NumberColumn("数量", format="%d")
+            "数量": st.column_config.NumberColumn("予約数", format="%d"),
+            "在庫数": st.column_config.NumberColumn("実在庫", format="%d"),
+            "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d")
         }
     )
 
