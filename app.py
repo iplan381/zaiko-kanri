@@ -219,15 +219,20 @@ st.divider()
 # --- A. 出庫予約リスト ---
 st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
-    # 【修正ポイント】絞り込み前の df_disp を使って、全ての予約に在庫情報を紐付ける
-    # これにより、在庫表を絞り込んでも予約リストの在庫数が「None」になりません
+    # --- 修正ポイント：絞り込み前の全在庫データ(all_stocks)を作成して紐付ける ---
+    # メインの df_disp は検索で中身が減るため、ここでは使いません
+    res_sum_all = df_res_all.groupby(["商品名", "サイズ", "地名"])["数量"].sum().reset_index().rename(columns={"数量": "予約計"})
+    all_stocks = pd.merge(df_stock, res_sum_all, on=["商品名", "サイズ", "地名"], how="left").fillna({"予約計": 0})
+    all_stocks["有効在庫"] = all_stocks["在庫数"] - all_stocks["予約計"]
+
+    # 予約データに、この「全在庫データ」を紐付ける
     df_rv = pd.merge(
         df_res_all, 
-        df_disp[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], 
+        all_stocks[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], 
         on=["商品名", "サイズ", "地名"], 
         how="left"
-    ).fillna({"在庫数": 0, "有効在庫": 0}) # 万が一一致がなくても0を表示
-
+    ).fillna({"在庫数": 0, "有効在庫": 0})
+    
     # 予約リスト専用の絞り込み（これは残しておきます）
     res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
     if res_filter_item != "すべて":
