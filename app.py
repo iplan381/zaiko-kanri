@@ -305,7 +305,7 @@ if not df_log.empty:
         min_date = df_log["日時"].min().date()
         max_date = df_log["日時"].max().date()
         log_date_range = st.date_input("期間選択", value=(min_date, max_date), key="log_date_filter")
- with col_log2:
+    with col_log2:
         # 1. すべての区分を取得し、除外したい項目を取り除く
         all_types_raw = sorted(df_log["区分"].unique())
         exclude_list = ["基準変更", "編集"]
