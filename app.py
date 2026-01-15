@@ -162,7 +162,12 @@ if selected_indices:
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                 col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
                 with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True, key=f"type_{i}")
-                with col2: m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
+               with col2:
+                    # 調整の時だけマイナスを許可、それ以外は0以上の制限をかける
+                    if m_type == "調整":
+                        m_qty = st.number_input("数量", value=0, key=f"qty_{i}")
+                    else:
+                        m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
                 with col3:
                     if m_type == "予約出庫":
                         res_date = st.date_input("予約日", value=dt.date.today() + dt.timedelta(days=1), key=f"date_{i}")
