@@ -306,7 +306,16 @@ if not df_log.empty:
         max_date = df_log["日時"].max().date()
         log_date_range = st.date_input("期間選択", value=(min_date, max_date), key="log_date_filter")
     with col_log2:
-        log_types = get_opts(df_log["区分"])
+        # 1. すべての区分を取得
+        all_types = get_opts(df_log["区分"])
+        
+        # 2. 除外したいリストを作成
+        exclude_list = ["基準変更", "編集"]
+        
+        # 3. 除外リストに含まれないものだけを抽出（「すべて」は残す）
+        log_types = [t for t in all_types if t not in exclude_list]
+        
+        # 4. 選択肢を表示
         selected_type = st.selectbox("区分の絞り込み", log_types, key="log_type_filter")
 
     # 2. データの絞り込み
