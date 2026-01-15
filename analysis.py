@@ -31,6 +31,7 @@ if not df_log_raw.empty:
     df = df_log_raw.copy()
     df["日時"] = pd.to_datetime(df["日時"])
     df["年"] = df["日時"].dt.year
+    # 月を文字化して変な目盛り（0.5月など）を解消
     df["月"] = df["日時"].dt.month.astype(str) + "月"
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
@@ -68,7 +69,7 @@ if not df_log_raw.empty:
         sel_size = "すべて表示"
         sel_loc = "すべて表示"
 
-    # フィルタリング
+    # フィルタリング適用
     df_final = df_m.copy()
     if sel_item != "すべて表示": df_final = df_final[df_final["商品名"] == sel_item]
     if sel_size != "すべて表示": df_final = df_final[df_final["サイズ"] == sel_size]
@@ -81,10 +82,8 @@ if not df_log_raw.empty:
         st.subheader("出荷状況分析")
         if not df_final.empty:
             df_final["表示項目"] = df_final["商品名"] + " (" + df_final["サイズ"] + " / " + df_final["地名"] + ")"
+            # グラフは数量順
             summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=False).reset_index()
-            
-            # ★誰にでも優しい「Viridis」配色を適用
-            # 明るい黄色が高い数値、濃い紫が低い数値を表します
             fig = px.bar(summary, x="表示項目", y="数量", text_auto=True,
                          color="数量", color_continuous_scale="viridis")
             st.plotly_chart(fig, use_container_width=True)
@@ -94,8 +93,10 @@ if not df_log_raw.empty:
     with tab2:
         st.subheader("履歴明細")
         if not df_final.empty:
+            # ★ここを修正：地名でまとめて、その中で数量順に並べる
             view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values(
-                by=["数量", "地名"], ascending=[False, True]
+                by=["地名", "数量"], 
+                ascending=[True, False]
             )
             st.dataframe(view_df, use_container_width=True, hide_index=True)
 
