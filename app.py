@@ -219,15 +219,16 @@ st.divider()
 # --- A. 出庫予約リスト ---
 st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
-    # 予約データに在庫情報を紐付ける
+    # 【修正ポイント】絞り込み前の df_disp を使って、全ての予約に在庫情報を紐付ける
+    # これにより、在庫表を絞り込んでも予約リストの在庫数が「None」になりません
     df_rv = pd.merge(
         df_res_all, 
         df_disp[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], 
         on=["商品名", "サイズ", "地名"], 
         how="left"
-    )
-    
-    # 商品名での絞り込み
+    ).fillna({"在庫数": 0, "有効在庫": 0}) # 万が一一致がなくても0を表示
+
+    # 予約リスト専用の絞り込み（これは残しておきます）
     res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
     if res_filter_item != "すべて":
         df_rv = df_rv[df_rv["商品名"] == res_filter_item]
@@ -235,7 +236,7 @@ if not df_res_all.empty:
     # 予約日の表示設定
     df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
     
-    # 表示する列の順番を整理
+    # 表示する列（地名とサイズも入っています）
     res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "有効在庫", "担当者"]
 
     # リスト表示
@@ -252,7 +253,7 @@ if not df_res_all.empty:
             "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d")
         }
     )
-
+    
     # 個別編集パネル
     selected_rows = res_event.selection.rows
     if selected_rows:
