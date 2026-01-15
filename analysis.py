@@ -87,15 +87,12 @@ if not df_log_raw.empty:
             df_final["表示項目"] = df_final["商品名"] + " (" + df_final["サイズ"] + " / " + df_final["地名"] + ")"
             
             if sel_month == "すべて表示":
-                # 月ごとの集計でも、合計数量が多い順に並べる
                 summary = df_final.groupby(["月", "表示項目"])["数量"].sum().reset_index()
-                # 並び替えのための合計値を計算
                 sort_order = summary.groupby("表示項目")["数量"].sum().sort_values(ascending=False).index
                 fig = px.bar(summary, x="表示項目", y="数量", color="月", text_auto=True,
                              title="月別の内訳 (数量順)", barmode="group",
                              category_orders={"表示項目": sort_order})
             else:
-                # 数量で降順ソート
                 summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=False).reset_index()
                 fig = px.bar(summary, x="表示項目", y="数量", text_auto=True,
                              color="数量", color_continuous_scale="Viridis")
@@ -105,10 +102,13 @@ if not df_log_raw.empty:
             st.info("該当するデータがありません。")
 
     with tab2:
-        st.subheader("分析対象の履歴明細 (数量の多い順)")
+        st.subheader("分析対象の履歴明細 (地名ごと・数量順)")
         if not df_final.empty:
-            # 表も数量の多い順にソート
-            view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values("数量", ascending=False)
+            # 並び替え：地名(昇順) → 数量(降順)
+            view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values(
+                by=["地名", "数量"], 
+                ascending=[True, False]
+            )
             st.dataframe(view_df, use_container_width=True, hide_index=True)
         else:
             st.info("データがありません。")
