@@ -102,12 +102,13 @@ if not df_log_raw.empty:
             st.info("該当するデータがありません。")
 
     with tab2:
-        st.subheader("分析対象の履歴明細 (地名ごと・数量順)")
+        st.subheader("分析対象の履歴明細 (数量優先・地名順)")
         if not df_final.empty:
-            # 並び替え：地名(昇順) → 数量(降順)
+            # 並び替え：数量(降順) → 地名(昇順)
+            # これにより、大きい数字が上に来て、同じ数字の中では地名が並びます
             view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values(
-                by=["地名", "数量"], 
-                ascending=[True, False]
+                by=["数量", "地名"], 
+                ascending=[False, True]
             )
             st.dataframe(view_df, use_container_width=True, hide_index=True)
         else:
