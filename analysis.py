@@ -139,4 +139,36 @@ if not df_log_raw.empty:
             st.plotly_chart(fig_abc, use_container_width=True)
 
         with tab4:
-            col_w
+            col_w1, col_w2 = st.columns(2)
+            with col_w1:
+                st.subheader("⚠️ 不動在庫分析")
+                st.caption("最後に出荷されてからの経過日数（商品/サイズ選択に連動）")
+                # 月の絞り込みを無視し、商品・サイズ選択に連動
+                df_dead_base = df_out_all.copy()
+                if sel_item != "すべて表示":
+                    df_dead_base = df_dead_base[df_dead_base["商品名"] == sel_item]
+                if sel_size != "すべて表示":
+                    df_dead_base = df_dead_base[df_dead_base["サイズ"] == sel_size]
+                
+                now = pd.Timestamp.now()
+                dead_stock = df_dead_base.groupby("項目詳細")["日時"].max().reset_index()
+                dead_stock = dead_stock.rename(columns={"日時": "最終出荷日"})
+                dead_stock["経過日数"] = (now - dead_stock["最終出荷日"]).dt.days
+                dead_stock.loc[dead_stock["経過日数"] < 0, "経過日数"] = 0
+                dead_stock = dead_stock.sort_values("経過日数", ascending=False)
+                dead_stock["最終出荷日"] = dead_stock["最終出荷日"].dt.strftime('%Y-%m-%d')
+                st.dataframe(dead_stock, use_container_width=True, hide_index=True)
+
+            with col_w2:
+                st.subheader("💡 推奨・安全在庫")
+                safety_df = df_final.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
+                safety_df["推奨在庫"] = (safety_df["mean"] + 2 * safety_df["std"]).round(0)
+                st.dataframe(safety_df[["項目詳細", "推奨在庫"]].sort_values("推奨在庫", ascending=False), use_container_width=True, hide_index=True)
+
+        with tab5:
+            st.subheader("🔢 履歴明細")
+            st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
+    else:
+        st.info("選択された条件に一致するデータがありません。")
+else:
+    st.error("データの読み込みに失敗しました。")
