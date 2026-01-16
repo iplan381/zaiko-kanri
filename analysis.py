@@ -93,25 +93,25 @@ if not df_log_raw.empty:
 
     tab1, tab2, tab3 = st.tabs(["📊 出荷分析（グラフ）", "📈 時系列トレンド", "🔢 詳細データ一覧"])
 
-   with tab1:
-        # 1. 商品×サイズ のマトリックス分析
-        st.subheader("📦 商品・サイズ別の出荷ボリューム")
-        if not df_final.empty:
-            # ヒートマップのように、どの組み合わせが多いか可視化
-            summary_heat = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
-            fig_heat = px.density_heatmap(summary_heat, x="サイズ", y="商品名", z="数量", 
-                                         text_auto=True, color_continuous_scale="Viridis",
-                                         title="商品×サイズ別 出荷集中度")
-            st.plotly_chart(fig_heat, use_container_width=True)
-
-        col_g1, col_g2 = st.columns(2)
+        with tab1:
+                # 1. 商品×サイズ のマトリックス分析
+                st.subheader("📦 商品・サイズ別の出荷ボリューム")
+                if not df_final.empty:
+                    # ヒートマップのように、どの組み合わせが多いか可視化
+                    summary_heat = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
+                    fig_heat = px.density_heatmap(summary_heat, x="サイズ", y="商品名", z="数量", 
+                                                 text_auto=True, color_continuous_scale="Viridis",
+                                                 title="商品×サイズ別 出荷集中度")
+                    st.plotly_chart(fig_heat, use_container_width=True)
         
-        with col_g1:
-            st.subheader("📍 地名別出荷シェア")
-            if not df_final.empty:
-                fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4,
-                                 color_discrete_sequence=px.colors.sequential.Pastel)
-                st.plotly_chart(fig_pie, use_container_width=True)
+                col_g1, col_g2 = st.columns(2)
+                
+                with col_g1:
+                    st.subheader("📍 地名別出荷シェア")
+                    if not df_final.empty:
+                        fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4,
+                                         color_discrete_sequence=px.colors.sequential.Pastel)
+                        st.plotly_chart(fig_pie, use_container_width=True)
 
         with col_g2:
             st.subheader("📅 曜日別の出荷傾向")
