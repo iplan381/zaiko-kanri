@@ -38,7 +38,7 @@ if not df_log_raw.empty:
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
-    # --- 🔍 5段階 絞り込み条件（復活！） ---
+    # --- 🔍 5段階 絞り込み条件 ---
     st.sidebar.header("🔍 絞り込み条件")
     
     # 1. 年
@@ -85,7 +85,7 @@ if not df_log_raw.empty:
         # KPI
         k1, k2, k3 = st.columns(3)
         with k1: st.metric("期間内 合計出荷", f"{int(df_final['数量'].sum()):,}")
-        with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
+        with k2: st.metric("稼働項目数", f"{df_final['項目詳細'].nunique()}")
         with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 傾向・シェア", "📈 トレンド", "🏆 ABC分析", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
@@ -93,7 +93,6 @@ if not df_log_raw.empty:
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
             summary_rank = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).head(20).reset_index()
-            # 棒グラフを縦（横並び）に統一し、バリアフリー配色
             fig_rank = px.bar(summary_rank, x="項目詳細", y="数量", text_auto=True, 
                               color_discrete_sequence=px.colors.qualitative.Safe)
             st.plotly_chart(fig_rank, use_container_width=True)
@@ -114,42 +113,30 @@ if not df_log_raw.empty:
                 fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color_discrete_sequence=['#56B4E9'])
                 st.plotly_chart(fig_day, use_container_width=True)
 
+        with tab2:
+            st.subheader("📈 出荷トレンド推移")
+            # 月の絞り込みを無視して、その年の流れを表示
+            df_trend_base = df_step1.copy()
+            if sel_item != "すべて表示":
+                df_trend_base = df_trend_base[df_trend_base["商品名"] == sel_item]
+            if sel_size != "すべて表示":
+                df_trend_base = df_trend_base[df_trend_base["サイズ"] == sel_size]
+            
+            if not df_trend_base.empty:
+                df_trend = df_trend_base.groupby(df_trend_base["日時"].dt.date)["数量"].sum().reset_index()
+                fig_trend = px.line(df_trend, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
+                st.plotly_chart(fig_trend, use_container_width=True)
+            else:
+                st.info("トレンドを表示するためのデータがありません。")
+
         with tab3:
             st.subheader("🏆 ABC分析（項目別）")
             abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
             abc_df["累計構成比"] = (abc_df["数量"].cumsum() / abc_df["数量"].sum()) * 100
             abc_df["ランク"] = abc_df["累計構成比"].apply(lambda x: "A (最重要)" if x <= 80 else ("B (重要)" if x <= 95 else "C (一般)"))
-            # 色盲の方にも優しいコントラスト配色
             fig_abc = px.bar(abc_df, x="項目詳細", y="数量", color="ランク", 
                              color_discrete_map={"A (最重要)": "#D55E00", "B (重要)": "#009E73", "C (一般)": "#F0E442"})
             st.plotly_chart(fig_abc, use_container_width=True)
 
         with tab4:
-            col_w1, col_w2 = st.columns(2)
-            with col_w1:
-                st.subheader("⚠️ 不動在庫（デッドストック）分析")
-                st.caption("全履歴の中で、最後に出荷されてから時間が経過している順")
-                now = pd.Timestamp.now()
-                # 最終出荷日を算出（絞り込みを無視した全体データから算出）
-                dead_stock = df_out_all.groupby("項目詳細")["日時"].max().reset_index()
-                dead_stock = dead_stock.rename(columns={"日時": "最終出荷日"})
-                # 経過日数を計算（未来日付による-1を回避）
-                dead_stock["経過日数"] = (now - dead_stock["最終出荷日"]).dt.days
-                dead_stock.loc[dead_stock["経過日数"] < 0, "経過日数"] = 0
-                dead_stock = dead_stock.sort_values("経過日数", ascending=False)
-                dead_stock["最終出荷日"] = dead_stock["最終出荷日"].dt.strftime('%Y-%m-%d')
-                st.dataframe(dead_stock, use_container_width=True, hide_index=True)
-
-            with col_w2:
-                st.subheader("💡 推奨・安全在庫")
-                safety_df = df_final.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
-                safety_df["推奨在庫"] = (safety_df["mean"] + 2 * safety_df["std"]).round(0)
-                st.dataframe(safety_df[["項目詳細", "推奨在庫"]].sort_values("推奨在庫", ascending=False), use_container_width=True, hide_index=True)
-
-        with tab5:
-            st.subheader("🔢 履歴明細")
-            st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
-    else:
-        st.info("選択された条件に一致するデータがありません。")
-else:
-    st.error("データの読み込みに失敗しました。")
+            col_w
