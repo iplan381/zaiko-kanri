@@ -124,7 +124,7 @@ if not df_log_raw.empty:
                 st.subheader("📍 地名別")
                 st.plotly_chart(px.pie(df_final, values='数量', names='地名', hole=0.4), use_container_width=True)
             with c2:
-                st.subheader("📅 曜日別傾向 (クリックして内訳を表示)")
+                st.subheader("📅 曜日別傾向")
                 df_final["曜日"] = df_final["日時"].dt.day_name()
                 day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
                 summary_day = df_final.groupby("曜日")["数量"].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']).reset_index()
