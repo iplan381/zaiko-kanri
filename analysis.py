@@ -25,7 +25,7 @@ def get_github_data(file_path):
 
 df_log_raw = get_github_data(FILE_PATH_LOG)
 
-st.title("📈 出庫分析システム")
+st.title("📈 階層別 在庫動態分析")
 
 if not df_log_raw.empty:
     # --- データ前処理 ---
@@ -89,7 +89,7 @@ if not df_log_raw.empty:
     st.divider()
 
     if not df_final.empty:
-        # --- KPIエリア（バッジ形式を廃止し、項目を独立） ---
+        # --- KPIエリア ---
         qty_this = df_final["数量"].sum()
         qty_last = df_last["数量"].sum()
         
@@ -106,12 +106,25 @@ if not df_log_raw.empty:
             with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
             with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 傾向", "📈 トレンド推移", "🏆 ランキング", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
+        # タブを4つに整理（ランキングを削除）
+        tab1, tab2, tab4, tab5 = st.tabs(["📊 傾向", "📈 トレンド推移", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
 
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
             summary_rank = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).tail(20).reset_index()
-            fig_rank = px.bar(summary_rank, y="項目詳細", x="数量", orientation='h', text_auto=True, color_discrete_sequence=px.colors.qualitative.Safe)
+            
+            # color="数量" を指定して色分け。color_continuous_scaleでグラデーションを設定
+            fig_rank = px.bar(
+                summary_rank, 
+                y="項目詳細", 
+                x="数量", 
+                orientation='h', 
+                text_auto=True,
+                color="数量",
+                color_continuous_scale=px.colors.sequential.Viridis
+            )
+            # カラーバー（右側の目盛り）が不要な場合は以下で非表示にできます
+            fig_rank.update_layout(coloraxis_showscale=False)
             st.plotly_chart(fig_rank, use_container_width=True)
 
             col1, col2 = st.columns(2)
@@ -126,7 +139,8 @@ if not df_log_raw.empty:
                 day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
                 summary_day = df_final.groupby("曜日")["数量"].sum().reindex(day_order).reset_index()
                 summary_day["表示曜日"] = summary_day["曜日"].map(day_jp)
-                fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color_discrete_sequence=['#56B4E9'])
+                fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color="数量", color_continuous_scale=px.colors.sequential.Blues)
+                fig_day.update_layout(coloraxis_showscale=False)
                 st.plotly_chart(fig_day, use_container_width=True)
 
         with tab2:
@@ -143,15 +157,6 @@ if not df_log_raw.empty:
             else:
                 fig_trend = px.line(df_trend_this, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
             st.plotly_chart(fig_trend, use_container_width=True)
-
-        with tab3:
-            st.subheader("🏆 ランキング（項目別）")
-            abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
-            total_qty = abc_df["数量"].sum()
-            abc_df["累積"] = abc_df["数量"].cumsum() / total_qty * 100
-            abc_df["ランク"] = abc_df["累積"].apply(lambda x: "A" if x <= 80 else ("B" if x <= 95 else "C"))
-            fig_abc = px.bar(abc_df.sort_values("数量"), y="項目詳細", x="数量", orientation='h', color="ランク", color_discrete_map={"A": "#D55E00", "B": "#009E73", "C": "#F0E442"})
-            st.plotly_chart(fig_abc, use_container_width=True)
 
         with tab4:
             col_w1, col_w2 = st.columns(2)
@@ -179,3 +184,5 @@ if not df_log_raw.empty:
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
     else:
         st.info("データがありません。")
+else:
+    st.error("データの読み込みに失敗しました。")
