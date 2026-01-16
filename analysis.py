@@ -48,6 +48,7 @@ if not df_log_raw.empty:
     month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 13)]
     sel_month_str = st.sidebar.selectbox("📆 ② 月を選択", month_options)
 
+    # 初期値
     sel_item = "すべて表示"
     sel_size = "すべて表示"
     sel_loc = "すべて表示"
@@ -71,25 +72,33 @@ if not df_log_raw.empty:
     st.sidebar.divider()
     show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
 
+    # --- 商品名・サイズ・地名の独立絞り込み ---
     item_list = ["すべて表示"] + sorted(df_step2["商品名"].unique().tolist())
     sel_item = st.sidebar.selectbox("📦 ④ 商品名を選択", item_list)
     
-    df_final = df_step2.copy()
-    df_last = df_last_base.copy()
-
+    df_item_filtered = df_step2.copy()
     if sel_item != "すべて表示":
-        df_final = df_final[df_final["商品名"] == sel_item]
-        df_last = df_last[df_last["商品名"] == sel_item]
-        size_list = ["すべて表示"] + sorted(df_final["サイズ"].unique().tolist())
-        sel_size = st.sidebar.selectbox("📏 ⑤ サイズを選択", size_list)
-        if sel_size != "すべて表示":
-            df_final = df_final[df_final["サイズ"] == sel_size]
-            df_last = df_last[df_last["サイズ"] == sel_size]
-            loc_list = ["すべて表示"] + sorted(df_final["地名"].unique().tolist())
-            sel_loc = st.sidebar.selectbox("📍 ⑥ 地名を選択", loc_list)
-            if sel_loc != "すべて表示":
-                df_final = df_final[df_final["地名"] == sel_loc]
-                df_last = df_last[df_last["地名"] == sel_loc]
+        df_item_filtered = df_item_filtered[df_item_filtered["商品名"] == sel_item]
+
+    # サイズと地名を並列で選べるようにする
+    size_list = ["すべて表示"] + sorted(df_item_filtered["サイズ"].unique().tolist())
+    sel_size = st.sidebar.selectbox("📏 ⑤ サイズを選択", size_list)
+    
+    loc_list = ["すべて表示"] + sorted(df_item_filtered["地名"].unique().tolist())
+    sel_loc = st.sidebar.selectbox("📍 ⑥ 地名を選択", loc_list)
+
+    # 最終的なフィルタリング
+    df_final = df_item_filtered.copy()
+    if sel_size != "すべて表示":
+        df_final = df_final[df_final["サイズ"] == sel_size]
+    if sel_loc != "すべて表示":
+        df_final = df_final[df_final["地名"] == sel_loc]
+
+    # 昨年対比用も同様にフィルタ
+    df_last = df_last_base.copy()
+    if sel_item != "すべて表示": df_last = df_last[df_last["商品名"] == sel_item]
+    if sel_size != "すべて表示": df_last = df_last[df_last["サイズ"] == sel_size]
+    if sel_loc != "すべて表示": df_last = df_last[df_last["地名"] == sel_loc]
 
     st.divider()
 
@@ -124,23 +133,18 @@ if not df_log_raw.empty:
                 st.subheader("📍 地名別")
                 st.plotly_chart(px.pie(df_final, values='数量', names='地名', hole=0.4), use_container_width=True)
             with c2:
-                st.subheader("📅 曜日別傾向")
+                st.subheader("📅 曜日別傾向 (クリックして内訳を表示)")
                 df_final["曜日"] = df_final["日時"].dt.day_name()
                 day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
                 summary_day = df_final.groupby("曜日")["数量"].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']).reset_index()
                 summary_day["表示曜日"] = summary_day["曜日"].map(day_jp)
-                
                 fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color="数量", color_continuous_scale=px.colors.sequential.Blues, custom_data=["表示曜日"])
                 fig_day.update_layout(coloraxis_showscale=False, clickmode='event+select')
-                
-                # クリックイベントの検知
                 selected_points = st.plotly_chart(fig_day, use_container_width=True, on_select="rerun")
                 
-                # クリックされた時の処理
                 if selected_points and "selection" in selected_points and selected_points["selection"]["points"]:
                     selected_day = selected_points["selection"]["points"][0]["x"]
                     st.info(f"📅 {selected_day}曜日の出荷内訳")
-                    # 該当する曜日でフィルタリング
                     df_day_detail = df_final[df_final["曜日"].map(day_jp) == selected_day]
                     day_summary = df_day_detail.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
                     st.dataframe(day_summary, use_container_width=True, hide_index=True)
@@ -157,6 +161,8 @@ if not df_log_raw.empty:
                 df_db = df_out_all.copy()
                 if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
+                if sel_loc != "すべて表示": df_db = df_db[df_db["地名"] == sel_loc]
+                
                 now = pd.Timestamp.now()
                 dead = df_db.groupby("項目詳細")["日時"].max().reset_index()
                 dead = dead.rename(columns={"日時": "最終出荷日"})
