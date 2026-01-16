@@ -75,30 +75,69 @@ if not df_log_raw.empty:
     if sel_size != "すべて表示": df_final = df_final[df_final["サイズ"] == sel_size]
     if sel_loc != "すべて表示": df_final = df_final[df_final["地名"] == sel_loc]
 
-    # --- メイン表示 ---
-    tab1, tab2 = st.tabs(["📊 出荷グラフ", "🔢 詳細データ一覧"])
+   # --- メイン表示 ---
+    # 1. 上部にKPI（重要指標）を表示
+    st.markdown("### 📌 今回の絞り込み結果")
+    kpi1, kpi2, kpi3 = st.columns(3)
+    with kpi1:
+        total_qty = int(df_final["数量"].sum())
+        st.metric("合計出荷数", f"{total_qty:,}")
+    with kpi2:
+        shipping_count = len(df_final)
+        st.metric("出荷件数", f"{shipping_count} 件")
+    with kpi3:
+        avg_qty = round(df_final["数量"].mean(), 1) if not df_final.empty else 0
+        st.metric("1回あたりの平均", f"{avg_qty}")
+
+    st.divider()
+
+    tab1, tab2, tab3 = st.tabs(["📊 出荷分析（グラフ）", "📈 時系列トレンド", "🔢 詳細データ一覧"])
 
     with tab1:
-        st.subheader("出荷状況分析")
+        col_g1, col_g2 = st.columns([2, 1])
+        
+        with col_g1:
+            st.subheader("商品別 出荷数ランキング")
+            if not df_final.empty:
+                df_final["表示項目"] = df_final["商品名"] + " (" + df_final["サイズ"] + ")"
+                summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=True).reset_index()
+                fig = px.bar(summary, y="表示項目", x="数量", orientation='h', text_auto=True,
+                             color="数量", color_continuous_scale="Blues")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col_g2:
+            st.subheader("地名別シェア")
+            if not df_final.empty:
+                fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4,
+                                 color_discrete_sequence=px.colors.sequential.RdBu)
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+    with tab2:
+        st.subheader("月別・日別出荷推移")
         if not df_final.empty:
-            df_final["表示項目"] = df_final["商品名"] + " (" + df_final["サイズ"] + " / " + df_final["地名"] + ")"
-            # グラフは数量順
-            summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=False).reset_index()
-            fig = px.bar(summary, x="表示項目", y="数量", text_auto=True,
-                         color="数量", color_continuous_scale="viridis")
-            st.plotly_chart(fig, use_container_width=True)
+            # 選択中の年における時系列推移
+            df_trend = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
+            fig_trend = px.line(df_trend, x="日時", y="数量", markers=True,
+                                title="日次の出荷ボリューム推移")
+            st.plotly_chart(fig_trend, use_container_width=True)
         else:
             st.info("データがありません。")
 
-    with tab2:
+    with tab3:
         st.subheader("履歴明細")
         if not df_final.empty:
-            # ★ここを修正：地名でまとめて、その中で数量順に並べる
-            view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].sort_values(
-                by=["地名", "数量"], 
-                ascending=[True, False]
+            # 見やすいように列を整理
+            view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].copy()
+            view_df["日時"] = view_df["日時"].dt.strftime('%Y-%m-%d %H:%M')
+            
+            # 地名でまとめて数量順に並べる
+            view_df = view_df.sort_values(by=["地名", "数量"], ascending=[True, False])
+            
+            st.dataframe(
+                view_df, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "数量": st.column_config.NumberColumn("出荷数", format="%d")
+                }
             )
-            st.dataframe(view_df, use_container_width=True, hide_index=True)
-
-else:
-    st.warning("データが読み込めません。")
