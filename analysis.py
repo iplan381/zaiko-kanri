@@ -11,7 +11,7 @@ REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_LOG = "stock_log_main.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-st.set_page_config(page_title="詳細階層分析ボード", layout="wide")
+st.set_page_config(page_title="出庫分析システム", layout="wide")
 
 def get_github_data(file_path):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
@@ -25,7 +25,7 @@ def get_github_data(file_path):
 
 df_log_raw = get_github_data(FILE_PATH_LOG)
 
-st.title("📈 階層別 在庫動態分析")
+st.title("📈 出庫分析システム")
 
 if not df_log_raw.empty:
     # --- データ前処理 ---
@@ -106,7 +106,7 @@ if not df_log_raw.empty:
             with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
             with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 傾向・シェア", "📈 トレンド推移", "🏆 ABC分析", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 傾向", "　📈 トレンド推移", "　🏆 ランキング", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
 
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
@@ -116,7 +116,7 @@ if not df_log_raw.empty:
 
             col1, col2 = st.columns(2)
             with col1:
-                st.subheader("📍 地名別シェア")
+                st.subheader("📍 地名別")
                 fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
                 st.plotly_chart(fig_pie, use_container_width=True)
             with col2:
@@ -145,7 +145,7 @@ if not df_log_raw.empty:
             st.plotly_chart(fig_trend, use_container_width=True)
 
         with tab3:
-            st.subheader("🏆 ABC分析（項目別）")
+            st.subheader("🏆 ランキング（項目別）")
             abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
             total_qty = abc_df["数量"].sum()
             abc_df["累積"] = abc_df["数量"].cumsum() / total_qty * 100
@@ -156,7 +156,7 @@ if not df_log_raw.empty:
         with tab4:
             col_w1, col_w2 = st.columns(2)
             with col_w1:
-                st.subheader("⚠️ 不動在庫分析")
+                st.subheader("⚠️ 不動在庫")
                 df_db = df_out_all.copy()
                 if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
