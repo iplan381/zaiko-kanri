@@ -34,11 +34,9 @@ if not df_log_raw.empty:
     df["日時"] = pd.to_datetime(df["日時"])
     df["年"] = df["日時"].dt.year
     df["月"] = df["日時"].dt.month
-    # 週番号（ISO規格）を取得
     df["週"] = df["日時"].dt.isocalendar().week
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
-    # 出庫データのみ
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
@@ -47,39 +45,34 @@ if not df_log_raw.empty:
     year_list = sorted(df_out_all["年"].unique(), reverse=True)
     sel_year = st.sidebar.selectbox("📅 ① 年を選択", year_list)
     
-    # 月の選択
     month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 13)]
     sel_month_str = st.sidebar.selectbox("📆 ② 月を選択", month_options)
 
-    # フィルタリング Step 1 (年)
+    # 初期値設定（NameError回避の重要ポイント）
+    sel_item = "すべて表示"
+    sel_size = "すべて表示"
+    sel_loc = "すべて表示"
+
     df_step1 = df_out_all[df_out_all["年"] == sel_year]
     
-    # フィルタリング Step 2 (月) & 週の選択肢作成
     if sel_month_str != "すべて表示":
         m_int = int(sel_month_str.replace("月", ""))
         df_step2 = df_step1[df_step1["月"] == m_int]
-        
-        # 選択された月の中に存在する週番号を取得
         available_weeks = sorted(df_step2["週"].unique())
         week_options = ["すべて表示"] + [f"第{w}週" for w in available_weeks]
         sel_week_str = st.sidebar.selectbox("📅 ③ 週を選択", week_options)
-        
         if sel_week_str != "すべて表示":
             w_int = int(sel_week_str.replace("第", "").replace("週", ""))
             df_step2 = df_step2[df_step2["週"] == w_int]
-            
-        # 昨年対比用のベースデータ
         df_last_base = df_out_all[(df_out_all["年"] == (sel_year - 1)) & (df_out_all["月"] == m_int)]
     else:
         df_step2 = df_step1
         df_last_base = df_out_all[df_out_all["年"] == (sel_year - 1)]
-        st.sidebar.info("週を絞り込むには月を選択してください")
 
-    # 昨年対比スイッチ
     st.sidebar.divider()
     show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
 
-    # 商品名以降の絞り込み
+    # 階層的な絞り込み
     item_list = ["すべて表示"] + sorted(df_step2["商品名"].unique().tolist())
     sel_item = st.sidebar.selectbox("📦 ④ 商品名を選択", item_list)
     
@@ -125,24 +118,19 @@ if not df_log_raw.empty:
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
             summary_rank = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).tail(20).reset_index()
-            fig_rank = px.bar(
-                summary_rank, y="項目詳細", x="数量", orientation='h', text_auto=True,
-                color="数量", color_continuous_scale=px.colors.sequential.Viridis
-            )
+            fig_rank = px.bar(summary_rank, y="項目詳細", x="数量", orientation='h', text_auto=True, color="数量", color_continuous_scale=px.colors.sequential.Viridis)
             fig_rank.update_layout(coloraxis_showscale=False)
             st.plotly_chart(fig_rank, use_container_width=True)
 
-            col1, col2 = st.columns(2)
-            with col1:
+            c1, c2 = st.columns(2)
+            with c1:
                 st.subheader("📍 地名別")
-                fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                st.plotly_chart(fig_pie, use_container_width=True)
-            with col2:
+                st.plotly_chart(px.pie(df_final, values='数量', names='地名', hole=0.4), use_container_width=True)
+            with c2:
                 st.subheader("📅 曜日別傾向")
                 df_final["曜日"] = df_final["日時"].dt.day_name()
-                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                 day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
-                summary_day = df_final.groupby("曜日")["数量"].sum().reindex(day_order).reset_index()
+                summary_day = df_final.groupby("曜日")["数量"].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']).reset_index()
                 summary_day["表示曜日"] = summary_day["曜日"].map(day_jp)
                 fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color="数量", color_continuous_scale=px.colors.sequential.Blues)
                 fig_day.update_layout(coloraxis_showscale=False)
@@ -150,17 +138,18 @@ if not df_log_raw.empty:
 
         with tab2:
             st.subheader("📈 トレンド推移")
-            df_trend_this = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
-            fig_trend = px.line(df_trend_this, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
-            st.plotly_chart(fig_trend, use_container_width=True)
+            df_trend = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
+            st.plotly_chart(px.line(df_trend, x="日時", y="数量", markers=True), use_container_width=True)
 
         with tab4:
             col_w1, col_w2 = st.columns(2)
             with col_w1:
                 st.subheader("⚠️ 不動在庫")
+                # エラー回避: 確実に sel_item, sel_size が存在するようにしてからフィルタリング
                 df_db = df_out_all.copy()
                 if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
+                
                 now = pd.Timestamp.now()
                 dead = df_db.groupby("項目詳細")["日時"].max().reset_index()
                 dead = dead.rename(columns={"日時": "最終出荷日"})
@@ -169,6 +158,7 @@ if not df_log_raw.empty:
                 dead = dead.sort_values("経過日数", ascending=False)
                 dead["最終出荷日"] = dead["最終出荷日"].dt.strftime('%Y-%m-%d')
                 st.dataframe(dead, use_container_width=True, hide_index=True)
+                
             with col_w2:
                 st.subheader("💡 推奨・安全在庫")
                 safety_df = df_final.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
