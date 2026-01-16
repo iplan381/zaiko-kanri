@@ -38,26 +38,21 @@ if not df_log_raw.empty:
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
     # --- 🔍 絞り込み条件 ---
-    st.sidebar.header("🔍 基本表示条件")
+    st.sidebar.header("🔍 絞り込み条件")
     year_list = sorted(df_out_all["年"].unique(), reverse=True)
-    sel_year = st.sidebar.selectbox("📅 表示年を選択", year_list)
+    sel_year = st.sidebar.selectbox("📅 ① 年を選択", year_list)
     
-    month_options = [f"{m}月" for m in range(1, 13)]
-    sel_month_str = st.sidebar.selectbox("📆 メイン表示月", ["すべて表示"] + month_options)
+    month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 13)]
+    sel_month_str = st.sidebar.selectbox("📆 ② 月を選択", month_options)
 
-    st.sidebar.divider()
-    st.sidebar.header("⚖️ 2ヶ月間 比較設定")
-    compare_m1 = st.sidebar.selectbox("月A", month_options, index=0)
-    compare_m2 = st.sidebar.selectbox("月B", month_options, index=1)
-
-    show_compare_lastyear = st.sidebar.checkbox("🔄 前年同期比を有効にする", value=True)
+    show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
 
     # 初期化
     sel_item = "すべて表示"
     sel_size = "すべて表示"
     sel_loc = "すべて表示"
 
-    # メインフィルタリング
+    # フィルタリング（年・月）
     df_this_year_base = df_out_all[df_out_all["年"] == sel_year]
     if sel_month_str != "すべて表示":
         m_int = int(sel_month_str.replace("月", ""))
@@ -74,15 +69,15 @@ if not df_log_raw.empty:
     if sel_item != "すべて表示":
         df_final = df_final[df_final["商品名"] == sel_item]
         df_last = df_last[df_last["商品名"] == sel_item]
-        df_this_year_base = df_this_year_base[df_this_year_base["商品名"] == sel_item]
-        
+        df_this_year_base = df_this_year_base[df_this_year_base["商品名"] == sel_item] # 年内比較用
+
         size_list = ["すべて表示"] + sorted(df_final["サイズ"].unique().tolist())
         sel_size = st.sidebar.selectbox("📏 ④ サイズを選択", size_list)
         if sel_size != "すべて表示":
             df_final = df_final[df_final["サイズ"] == sel_size]
             df_last = df_last[df_last["サイズ"] == sel_size]
             df_this_year_base = df_this_year_base[df_this_year_base["サイズ"] == sel_size]
-            
+
             loc_list = ["すべて表示"] + sorted(df_final["地名"].unique().tolist())
             sel_loc = st.sidebar.selectbox("📍 ⑤ 地名を選択", loc_list)
             if sel_loc != "すべて表示":
@@ -97,9 +92,9 @@ if not df_log_raw.empty:
         qty_this = df_final["数量"].sum()
         qty_last = df_last["数量"].sum()
         
-        cols = st.columns(4 if show_compare_lastyear else 3)
-        with cols[0]: st.metric(f"{sel_month_str} 合計出荷", f"{int(qty_this):,}")
-        if show_compare_lastyear:
+        cols = st.columns(4 if show_compare else 3)
+        with cols[0]: st.metric("期間内 合計出荷", f"{int(qty_this):,}")
+        if show_compare:
             with cols[1]: st.metric("前年同期実績", f"{int(qty_last):,}")
             with cols[2]: 
                 diff_pct = f"{round(((qty_this - qty_last) / qty_last) * 100, 1)}%" if qty_last > 0 else "---"
@@ -109,8 +104,7 @@ if not df_log_raw.empty:
             with cols[1]: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
             with cols[2]: st.metric("期間内 平均出荷", f"{round(df_final['数量'].mean(), 1)}")
 
-        # --- タブ構成 ---
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 傾向・シェア", "📈 トレンド推移", "⚖️ 2ヶ月間 比較分析", "🏆 ABC分析", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 傾向・シェア", "📈 トレンド推移", "🏆 ABC分析", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
 
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
@@ -119,44 +113,44 @@ if not df_log_raw.empty:
             st.plotly_chart(fig_rank, use_container_width=True)
 
         with tab2:
+            # --- 1. 選択期間内の日次推移 ---
             st.subheader(f"📅 {sel_month_str if sel_month_str != 'すべて表示' else '年間'}の日次トレンド")
             df_daily = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
-            fig_daily = px.line(df_daily, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
-            st.plotly_chart(fig_daily, use_container_width=True)
+            df_daily["年区分"] = str(sel_year)
             
+            if show_compare and not df_last.empty:
+                df_daily_last = df_last.groupby(df_last["日時"].dt.date)["数量"].sum().reset_index()
+                df_daily_last["年区分"] = str(sel_year - 1)
+                df_daily_last["日時"] = pd.to_datetime(df_daily_last["日時"]) + pd.offsets.DateOffset(years=1)
+                fig_daily = px.line(pd.concat([df_daily, df_daily_last]), x="日時", y="数量", color="年区分", markers=True, color_discrete_map={str(sel_year): "#D55E00", str(sel_year-1): "#999999"})
+            else:
+                fig_daily = px.line(df_daily, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
+            st.plotly_chart(fig_daily, use_container_width=True)
+
+            # --- 2. 同じ年の中での月別比較（新設！） ---
             st.divider()
-            st.subheader(f"📊 {sel_year}年 月別出荷ボリューム")
-            df_m_summary = df_this_year_base.groupby("月")["数量"].sum().reset_index()
-            df_m_summary["月表示"] = df_m_summary["月"].astype(str) + "月"
-            fig_m = px.bar(df_m_summary, x="月表示", y="数量", text_auto=True, color_discrete_sequence=['#56B4E9'])
-            st.plotly_chart(fig_m, use_container_width=True)
+            st.subheader(f"📊 {sel_year}年 月別出荷ボリューム比較")
+            df_monthly = df_this_year_base.groupby("月")["数量"].sum().reset_index()
+            # 1月〜12月を確実に表示させる
+            all_months = pd.DataFrame({"月": range(1, 13)})
+            df_monthly = pd.merge(all_months, df_monthly, on="月", how="left").fillna(0)
+            df_monthly["月表示"] = df_monthly["月"].astype(str) + "月"
+            
+            fig_monthly = px.bar(df_monthly, x="月表示", y="数量", text_auto=True, 
+                                 title=f"{sel_year}年内の推移",
+                                 color_discrete_sequence=['#56B4E9'])
+            # 選択中の月を強調
+            if sel_month_str != "すべて表示":
+                m_idx = int(sel_month_str.replace("月", "")) - 1
+                fig_monthly.data[0].marker.color = ['#56B4E9'] * 12
+                # 修正：plotlyのリスト指定
+                colors = ['#56B4E9'] * 12
+                colors[m_idx] = '#D55E00' # 選択月をオレンジに
+                fig_monthly.update_traces(marker_color=colors)
+
+            st.plotly_chart(fig_monthly, use_container_width=True)
 
         with tab3:
-            st.subheader(f"⚖️ {compare_m1} と {compare_m2} の直接比較")
-            m1_int = int(compare_m1.replace("月", ""))
-            m2_int = int(compare_m2.replace("月", ""))
-            
-            df_m1 = df_this_year_base[df_this_year_base["月"] == m1_int]
-            df_m2 = df_this_year_base[df_this_year_base["月"] == m2_int]
-            
-            c1, c2, c3 = st.columns(3)
-            with c1: st.metric(f"{compare_m1} 合計", f"{int(df_m1['数量'].sum()):,}")
-            with c2: st.metric(f"{compare_m2} 合計", f"{int(df_m2['数量'].sum()):,}")
-            with c3: 
-                m_diff = df_m2["数量"].sum() - df_m1["数量"].sum()
-                st.metric("差分", f"{int(m_diff):+,}")
-
-            # 日次比較グラフ（1日〜31日の動きを重ねる）
-            st.write("📝 **日次推移の重ね合わせ比較** (月の何日頃に動いているか)")
-            df_m1_daily = df_m1.groupby(df_m1["日時"].dt.day)["数量"].sum().reset_index().rename(columns={"日時": "日", "数量": compare_m1})
-            df_m2_daily = df_m2.groupby(df_m2["日時"].dt.day)["数量"].sum().reset_index().rename(columns={"日時": "日", "数量": compare_m2})
-            df_comp_daily = pd.merge(df_m1_daily, df_m2_daily, on="日", how="outer").fillna(0).sort_values("日")
-            
-            fig_comp_line = px.line(df_comp_daily, x="日", y=[compare_m1, compare_m2], markers=True,
-                                    color_discrete_map={compare_m1: "#56B4E9", compare_m2: "#D55E00"})
-            st.plotly_chart(fig_comp_line, use_container_width=True)
-
-        with tab4:
             st.subheader("🏆 ABC分析")
             abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
             abc_df["累積"] = abc_df["数量"].cumsum() / abc_df["数量"].sum() * 100
@@ -164,7 +158,7 @@ if not df_log_raw.empty:
             fig_abc = px.bar(abc_df.sort_values("数量"), y="項目詳細", x="数量", orientation='h', color="ランク", color_discrete_map={"A": "#D55E00", "B": "#009E73", "C": "#F0E442"})
             st.plotly_chart(fig_abc, use_container_width=True)
 
-        with tab5:
+        with tab4:
             col_w1, col_w2 = st.columns(2)
             with col_w1:
                 st.subheader("⚠️ 不動在庫")
@@ -174,6 +168,7 @@ if not df_log_raw.empty:
                 now = pd.Timestamp.now()
                 dead = df_db.groupby("項目詳細")["日時"].max().reset_index().rename(columns={"日時": "最終出荷日"})
                 dead["経過日数"] = (now - dead["最終出荷日"]).dt.days
+                dead.loc[dead["経過日数"] < 0, "経過日数"] = 0
                 dead["最終出荷日"] = dead["最終出荷日"].dt.strftime('%Y-%m-%d')
                 st.dataframe(dead.sort_values("経過日数", ascending=False), use_container_width=True, hide_index=True)
             with col_w2:
@@ -182,7 +177,7 @@ if not df_log_raw.empty:
                 safety["推奨在庫"] = (safety["mean"] + 2 * safety["std"]).round(0)
                 st.dataframe(safety[["項目詳細", "推奨在庫"]].sort_values("推奨在庫", ascending=False), use_container_width=True, hide_index=True)
 
-        with tab6:
+        with tab5:
             st.subheader("🔢 履歴明細")
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
     else:
