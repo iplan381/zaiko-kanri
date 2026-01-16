@@ -85,7 +85,7 @@ if not df_log_raw.empty:
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
             summary_rank = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).tail(20).reset_index()
-            # 横棒グラフに設定 (orientation='h')
+            # ランキングは読みやすさ重視で「横棒」
             fig_rank = px.bar(summary_rank, y="項目詳細", x="数量", orientation='h', text_auto=True, 
                               color_discrete_sequence=px.colors.qualitative.Safe)
             st.plotly_chart(fig_rank, use_container_width=True)
@@ -99,12 +99,13 @@ if not df_log_raw.empty:
             with col2:
                 st.subheader("📅 曜日別傾向")
                 df_final["曜日"] = df_final["日時"].dt.day_name()
-                day_order = ['Sunday', 'Saturday', 'Friday', 'Thursday', 'Wednesday', 'Tuesday', 'Monday'] # 下から上に並ぶため逆順
+                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                 day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
                 summary_day = df_final.groupby("曜日")["数量"].sum().reindex(day_order).reset_index()
                 summary_day["表示曜日"] = summary_day["曜日"].map(day_jp)
-                # 横棒グラフに設定
-                fig_day = px.bar(summary_day, y="表示曜日", x="数量", orientation='h', text_auto=True, color_discrete_sequence=['#56B4E9'])
+                # 💡 ご要望：曜日傾向は「縦棒」
+                fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, 
+                                 color_discrete_sequence=['#56B4E9'])
                 st.plotly_chart(fig_day, use_container_width=True)
 
         with tab2:
@@ -119,14 +120,12 @@ if not df_log_raw.empty:
 
         with tab3:
             st.subheader("🏆 ABC分析（項目別）")
-            abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).reset_index()
-            abc_df["累計構成比"] = (abc_df["数量"].cumsum() / abc_df["数量"].sum()) * 100
-            # 累積構成比を逆から計算してランク付け
+            # ABC分析も項目名が長いため「横棒」
+            abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
             total_qty = abc_df["数量"].sum()
-            abc_df = abc_df.sort_values("数量", ascending=False)
             abc_df["累積構成比"] = (abc_df["数量"].cumsum() / total_qty) * 100
             abc_df["ランク"] = abc_df["累積構成比"].apply(lambda x: "A (最重要)" if x <= 80 else ("B (重要)" if x <= 95 else "C (一般)"))
-            # 横棒グラフに設定
+            
             fig_abc = px.bar(abc_df.sort_values("数量", ascending=True), y="項目詳細", x="数量", orientation='h', color="ランク", 
                              color_discrete_map={"A (最重要)": "#D55E00", "B (重要)": "#009E73", "C (一般)": "#F0E442"})
             st.plotly_chart(fig_abc, use_container_width=True)
