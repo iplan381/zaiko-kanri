@@ -13,6 +13,7 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 st.set_page_config(page_title="出庫分析システム", layout="wide")
 
+@st.cache_data(ttl=60)
 def get_github_data(file_path):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -33,6 +34,8 @@ if not df_log_raw.empty:
     df["日時"] = pd.to_datetime(df["日時"])
     df["年"] = df["日時"].dt.year
     df["月"] = df["日時"].dt.month
+    # 週番号（ISO規格）を取得
+    df["週"] = df["日時"].dt.isocalendar().week
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
     # 出庫データのみ
@@ -44,30 +47,41 @@ if not df_log_raw.empty:
     year_list = sorted(df_out_all["年"].unique(), reverse=True)
     sel_year = st.sidebar.selectbox("📅 ① 年を選択", year_list)
     
+    # 月の選択
     month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 13)]
     sel_month_str = st.sidebar.selectbox("📆 ② 月を選択", month_options)
+
+    # フィルタリング Step 1 (年)
+    df_step1 = df_out_all[df_out_all["年"] == sel_year]
+    
+    # フィルタリング Step 2 (月) & 週の選択肢作成
+    if sel_month_str != "すべて表示":
+        m_int = int(sel_month_str.replace("月", ""))
+        df_step2 = df_step1[df_step1["月"] == m_int]
+        
+        # 選択された月の中に存在する週番号を取得
+        available_weeks = sorted(df_step2["週"].unique())
+        week_options = ["すべて表示"] + [f"第{w}週" for w in available_weeks]
+        sel_week_str = st.sidebar.selectbox("📅 ③ 週を選択", week_options)
+        
+        if sel_week_str != "すべて表示":
+            w_int = int(sel_week_str.replace("第", "").replace("週", ""))
+            df_step2 = df_step2[df_step2["週"] == w_int]
+            
+        # 昨年対比用のベースデータ
+        df_last_base = df_out_all[(df_out_all["年"] == (sel_year - 1)) & (df_out_all["月"] == m_int)]
+    else:
+        df_step2 = df_step1
+        df_last_base = df_out_all[df_out_all["年"] == (sel_year - 1)]
+        st.sidebar.info("週を絞り込むには月を選択してください")
 
     # 昨年対比スイッチ
     st.sidebar.divider()
     show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
 
-    # エラー防止のための初期化
-    sel_item = "すべて表示"
-    sel_size = "すべて表示"
-    sel_loc = "すべて表示"
-
-    # --- フィルタリング ---
-    df_step1 = df_out_all[df_out_all["年"] == sel_year]
-    if sel_month_str != "すべて表示":
-        m_int = int(sel_month_str.replace("月", ""))
-        df_step2 = df_step1[df_step1["月"] == m_int]
-        df_last_base = df_out_all[(df_out_all["年"] == (sel_year - 1)) & (df_out_all["月"] == m_int)]
-    else:
-        df_step2 = df_step1
-        df_last_base = df_out_all[df_out_all["年"] == (sel_year - 1)]
-
+    # 商品名以降の絞り込み
     item_list = ["すべて表示"] + sorted(df_step2["商品名"].unique().tolist())
-    sel_item = st.sidebar.selectbox("📦 ③ 商品名を選択", item_list)
+    sel_item = st.sidebar.selectbox("📦 ④ 商品名を選択", item_list)
     
     df_final = df_step2.copy()
     df_last = df_last_base.copy()
@@ -76,12 +90,12 @@ if not df_log_raw.empty:
         df_final = df_final[df_final["商品名"] == sel_item]
         df_last = df_last[df_last["商品名"] == sel_item]
         size_list = ["すべて表示"] + sorted(df_final["サイズ"].unique().tolist())
-        sel_size = st.sidebar.selectbox("📏 ④ サイズを選択", size_list)
+        sel_size = st.sidebar.selectbox("📏 ⑤ サイズを選択", size_list)
         if sel_size != "すべて表示":
             df_final = df_final[df_final["サイズ"] == sel_size]
             df_last = df_last[df_last["サイズ"] == sel_size]
             loc_list = ["すべて表示"] + sorted(df_final["地名"].unique().tolist())
-            sel_loc = st.sidebar.selectbox("📍 ⑤ 地名を選択", loc_list)
+            sel_loc = st.sidebar.selectbox("📍 ⑥ 地名を選択", loc_list)
             if sel_loc != "すべて表示":
                 df_final = df_final[df_final["地名"] == sel_loc]
                 df_last = df_last[df_last["地名"] == sel_loc]
@@ -106,24 +120,15 @@ if not df_log_raw.empty:
             with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
             with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
-        # タブを4つに整理（ランキングを削除）
         tab1, tab2, tab4, tab5 = st.tabs(["📊 傾向", "📈 トレンド推移", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
 
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
             summary_rank = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).tail(20).reset_index()
-            
-            # color="数量" を指定して色分け。color_continuous_scaleでグラデーションを設定
             fig_rank = px.bar(
-                summary_rank, 
-                y="項目詳細", 
-                x="数量", 
-                orientation='h', 
-                text_auto=True,
-                color="数量",
-                color_continuous_scale=px.colors.sequential.Viridis
+                summary_rank, y="項目詳細", x="数量", orientation='h', text_auto=True,
+                color="数量", color_continuous_scale=px.colors.sequential.Viridis
             )
-            # カラーバー（右側の目盛り）が不要な場合は以下で非表示にできます
             fig_rank.update_layout(coloraxis_showscale=False)
             st.plotly_chart(fig_rank, use_container_width=True)
 
@@ -144,18 +149,9 @@ if not df_log_raw.empty:
                 st.plotly_chart(fig_day, use_container_width=True)
 
         with tab2:
-            st.subheader("📈 トレンド推移" + (" (昨年対比)" if show_compare else ""))
+            st.subheader("📈 トレンド推移")
             df_trend_this = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
-            df_trend_this["年区分"] = str(sel_year)
-            
-            if show_compare and not df_last.empty:
-                df_trend_last = df_last.groupby(df_last["日時"].dt.date)["数量"].sum().reset_index()
-                df_trend_last["年区分"] = str(sel_year - 1)
-                df_trend_last["日時"] = pd.to_datetime(df_trend_last["日時"]) + pd.offsets.DateOffset(years=1)
-                df_combined = pd.concat([df_trend_this, df_trend_last])
-                fig_trend = px.line(df_combined, x="日時", y="数量", color="年区分", markers=True, color_discrete_map={str(sel_year): "#D55E00", str(sel_year-1): "#999999"})
-            else:
-                fig_trend = px.line(df_trend_this, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
+            fig_trend = px.line(df_trend_this, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
             st.plotly_chart(fig_trend, use_container_width=True)
 
         with tab4:
@@ -183,6 +179,6 @@ if not df_log_raw.empty:
             st.subheader("🔢 履歴明細")
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
     else:
-        st.info("データがありません。")
+        st.info("選択された条件に該当するデータがありません。")
 else:
     st.error("データの読み込みに失敗しました。")
