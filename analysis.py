@@ -78,22 +78,28 @@ if not df_log_raw.empty:
 # --- メイン表示 ---
     st.divider()
 
-    # タブを5つに拡張
+    # 1. 基本単位（ユニークキー）の作成
+    # 後の集計で使いやすいように「商品名・サイズ・地名」を結合した列を作ります
+    df_final["項目詳細"] = df_final["商品名"] + " | " + df_final["サイズ"] + " | " + df_final["地名"]
+
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 傾向・シェア", "📈 トレンド・前年比較", "🏆 ABC分析", "⚠️ 不動在庫・安全在庫", "🔢 履歴明細"
     ])
 
     with tab1:
-        # (既存のヒートマップ、地名シェア、曜日別グラフ)
-        st.subheader("📦 商品・サイズ別の需要集中度")
-        summary_heat = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
-        fig_heat = px.density_heatmap(summary_heat, x="サイズ", y="商品名", z="数量", text_auto=True, color_continuous_scale="Viridis")
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.subheader("📦 詳細項目別の出荷ボリューム")
+        if not df_final.empty:
+            # 商品名・サイズ・地名をすべて含めて集計
+            summary_full = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).reset_index()
+            fig_full = px.bar(summary_full, y="項目詳細", x="数量", orientation='h', 
+                             text_auto=True, color="数量", title="詳細別出荷ランキング")
+            st.plotly_chart(fig_full, use_container_width=True)
 
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             st.subheader("📍 地名別出荷シェア")
-            fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4, 
+                             color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig_pie, use_container_width=True)
         with col_g2:
             st.subheader("📅 曜日別の出荷傾向")
@@ -105,57 +111,20 @@ if not df_log_raw.empty:
             fig_day = px.bar(summary_day, x="曜日", y="数量", text_auto=True, color_discrete_sequence=['#FF8C00'])
             st.plotly_chart(fig_day, use_container_width=True)
 
-    with tab2:
-        st.subheader("📈 時系列トレンド（前年比較）")
-        # 当年と前年の比較用データ作成
-        df_out["年月日"] = df_out["日時"].dt.strftime('%m-%d')
-        df_this_year = df_out[df_out["年"] == sel_year].groupby("年月日")["数量"].sum().reset_index()
-        df_last_year = df_out[df_out["年"] == (sel_year - 1)].groupby("年月日")["数量"].sum().reset_index()
-        
-        df_compare = pd.merge(df_this_year, df_last_year, on="年月日", how="outer", suffixes=('_今年', '_前年')).sort_values("年月日").fillna(0)
-        fig_compare = px.line(df_compare, x="年月日", y=["数量_今年", "数量_前年"], title=f"{sel_year}年 vs {sel_year-1}年 の出荷推移")
-        st.plotly_chart(fig_compare, use_container_width=True)
-
     with tab3:
-        st.subheader("🏆 ABC分析（重要商品の特定）")
-        # 出荷数量でランク付け
-        abc_df = df_final.groupby("商品名")["数量"].sum().sort_values(ascending=False).reset_index()
+        st.subheader("🏆 ABC分析（詳細項目別）")
+        # 商品×サイズ×地名 でランク付け
+        abc_df = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
         abc_df["累計構成比"] = (abc_df["数量"].cumsum() / abc_df["数量"].sum()) * 100
         abc_df["ランク"] = abc_df["累計構成比"].apply(lambda x: "A (最重要)" if x <= 80 else ("B (重要)" if x <= 95 else "C (一般)"))
         
-        col_a1, col_a2 = st.columns([2, 1])
-        with col_a1:
-            fig_abc = px.bar(abc_df, x="商品名", y="数量", color="ランク", title="出荷数パレート図",
-                             color_discrete_map={"A (最重要)": "#EF553B", "B (重要)": "#636EFA", "C (一般)": "#00CC96"})
-            st.plotly_chart(fig_abc, use_container_width=True)
-        with col_a2:
-            st.write("ランク別集計")
-            st.dataframe(abc_df[["ランク", "商品名", "数量"]], hide_index=True)
+        fig_abc = px.bar(abc_df, x="項目詳細", y="数量", color="ランク", title="詳細項目パレート図")
+        st.plotly_chart(fig_abc, use_container_width=True)
 
     with tab4:
-        col_w1, col_w2 = st.columns(2)
-        with col_w1:
-            st.subheader("⚠️ デッドストック候補")
-            # 選択期間中に出荷が0の商品（マスターと照らし合わせるのが理想ですが、今回はログ全体と比較）
-            all_items = set(df_out["商品名"].unique())
-            active_items = set(df_final["商品名"].unique())
-            dead_items = all_items - active_items
-            if dead_items:
-                st.warning(f"以下の {len(dead_items)} 商品はこの期間に出荷がありません")
-                st.write(list(dead_items))
-            else:
-                st.success("全商品に出荷がありました！")
-        
-        with col_w2:
-            st.subheader("💡 安全在庫の目安（計算）")
-            # 簡易計算：平均出荷量 + 2σ（標準偏差）
-            safety_df = df_final.groupby("商品名")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
-            safety_df["推奨・安全在庫数"] = (safety_df["mean"] + 2 * safety_df["std"]).round(0)
-            st.write("過去の変動から計算した、欠品させないための最低在庫目安です。")
-            st.dataframe(safety_df[["商品名", "推奨・安全在庫数"]].sort_values("推奨・安全在庫数", ascending=False), hide_index=True)
-
-    with tab5:
-        st.subheader("🔢 履歴明細")
-        view_df = df_final[["日時", "商品名", "サイズ", "地名", "数量", "担当者"]].copy()
-        view_df["日時"] = view_df["日時"].dt.strftime('%Y-%m-%d %H:%M')
-        st.dataframe(view_df.sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
+        st.subheader("💡 詳細別・安全在庫の目安")
+        # 詳細項目ごとに標準偏差を計算
+        safety_df = df_final.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
+        safety_df["推奨在庫数"] = (safety_df["mean"] + 2 * safety_df["std"]).round(0)
+        st.dataframe(safety_df[["項目詳細", "推奨在庫数"]].sort_values("推奨在庫数", ascending=False), 
+                     use_container_width=True, hide_index=True)
