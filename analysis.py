@@ -93,24 +93,40 @@ if not df_log_raw.empty:
 
     tab1, tab2, tab3 = st.tabs(["📊 出荷分析（グラフ）", "📈 時系列トレンド", "🔢 詳細データ一覧"])
 
-    with tab1:
-        col_g1, col_g2 = st.columns([2, 1])
+   with tab1:
+        # 1. 商品×サイズ のマトリックス分析
+        st.subheader("📦 商品・サイズ別の出荷ボリューム")
+        if not df_final.empty:
+            # ヒートマップのように、どの組み合わせが多いか可視化
+            summary_heat = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
+            fig_heat = px.density_heatmap(summary_heat, x="サイズ", y="商品名", z="数量", 
+                                         text_auto=True, color_continuous_scale="Viridis",
+                                         title="商品×サイズ別 出荷集中度")
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+        col_g1, col_g2 = st.columns(2)
         
         with col_g1:
-            st.subheader("商品別 出荷数ランキング")
-            if not df_final.empty:
-                df_final["表示項目"] = df_final["商品名"] + " (" + df_final["サイズ"] + ")"
-                summary = df_final.groupby("表示項目")["数量"].sum().sort_values(ascending=True).reset_index()
-                fig = px.bar(summary, y="表示項目", x="数量", orientation='h', text_auto=True,
-                             color="数量", color_continuous_scale="Blues")
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col_g2:
-            st.subheader("地名別シェア")
+            st.subheader("📍 地名別出荷シェア")
             if not df_final.empty:
                 fig_pie = px.pie(df_final, values='数量', names='地名', hole=0.4,
-                                 color_discrete_sequence=px.colors.sequential.RdBu)
+                                 color_discrete_sequence=px.colors.sequential.Pastel)
                 st.plotly_chart(fig_pie, use_container_width=True)
+
+        with col_g2:
+            st.subheader("📅 曜日別の出荷傾向")
+            if not df_final.empty:
+                # 曜日を抽出して並び替え
+                df_final["曜日"] = df_final["日時"].dt.day_name()
+                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                summary_day = df_final.groupby("曜日")["数量"].sum().reindex(day_order).reset_index()
+                # 日本語表示にするなら map を使う
+                day_jp = {'Monday': '月', 'Tuesday': '火', 'Wednesday': '水', 'Thursday': '木', 'Friday': '金', 'Saturday': '土', 'Sunday': '日'}
+                summary_day["曜日"] = summary_day["曜日"].map(day_jp)
+                
+                fig_day = px.bar(summary_day, x="曜日", y="数量", text_auto=True,
+                                 color_discrete_sequence=['#FF8C00'])
+                st.plotly_chart(fig_day, use_container_width=True)
 
     with tab2:
         st.subheader("月別・日別出荷推移")
