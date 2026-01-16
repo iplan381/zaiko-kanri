@@ -35,7 +35,7 @@ if not df_log_raw.empty:
     df["月"] = df["日時"].dt.month
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
-    # 出庫データ
+    # 出庫データのみ
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
@@ -44,12 +44,12 @@ if not df_log_raw.empty:
     year_list = sorted(df_out_all["年"].unique(), reverse=True)
     sel_year = st.sidebar.selectbox("📅 ① 年を選択", year_list)
     
-    month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 12 + 1)]
+    month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 13)]
     sel_month_str = st.sidebar.selectbox("📆 ② 月を選択", month_options)
 
     # 昨年対比スイッチ
     st.sidebar.divider()
-    show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=False)
+    show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
 
     # --- フィルタリングロジック ---
     df_this_year = df_out_all[df_out_all["年"] == sel_year]
@@ -88,17 +88,18 @@ if not df_log_raw.empty:
         qty_this = df_final["数量"].sum()
         qty_last = df_last_year_base["数量"].sum()
         
-        if show_compare:
-            k1, k2, k3 = st.columns(3)
-            diff_pct = f"{round(((qty_this - qty_last) / qty_last) * 100, 1)}%" if qty_last > 0 else "---"
+        k1, k2, k3 = st.columns(3)
+        
+        # 昨年対比がONの場合のみdeltaを表示
+        if show_compare and qty_last > 0:
+            diff_pct = f"{round(((qty_this - qty_last) / qty_last) * 100, 1)}%"
             with k1: st.metric("期間内 合計出荷", f"{int(qty_this):,}", delta=diff_pct)
             with k2: st.metric("前年同期実績", f"{int(qty_last):,}")
-            with k3: st.metric("稼働項目数", f"{df_final['項目詳細'].nunique()}")
         else:
-            k1, k2, k3 = st.columns(3)
             with k1: st.metric("期間内 合計出荷", f"{int(qty_this):,}")
-            with k2: st.metric("稼働項目数", f"{df_final['項目詳細'].nunique()}")
-            with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
+            with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
+        
+        with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 傾向・シェア", "📈 トレンド推移", "🏆 ABC分析", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
 
@@ -127,25 +128,19 @@ if not df_log_raw.empty:
 
         with tab2:
             st.subheader("📈 出荷トレンド推移" + (" (昨年対比)" if show_compare else ""))
-            
-            # 今年の時系列データ
             df_trend_this = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
             df_trend_this["年区分"] = str(sel_year)
             
-            if show_compare:
-                # 昨年の時系列データ（日を合わせて比較するために、仮想的に今年の日付に変換）
+            if show_compare and not df_last_year_base.empty:
                 df_trend_last = df_last_year_base.groupby(df_last_year_base["日時"].dt.date)["数量"].sum().reset_index()
                 df_trend_last["年区分"] = str(sel_year - 1)
-                # 比較しやすいように、昨年の日付に1年足してプロット（日次比較の場合）
-                # ※月単位比較の場合は単純に月で出すが、ここでは絞り込んだ期間内の動きを見せる
+                # 日付を今年に合わせて比較
                 df_trend_last["日時"] = pd.to_datetime(df_trend_last["日時"]) + pd.offsets.DateOffset(years=1)
-                
                 df_combined = pd.concat([df_trend_this, df_trend_last])
                 fig_trend = px.line(df_combined, x="日時", y="数量", color="年区分", markers=True,
                                    color_discrete_map={str(sel_year): "#D55E00", str(sel_year-1): "#999999"})
             else:
                 fig_trend = px.line(df_trend_this, x="日時", y="数量", markers=True, color_discrete_sequence=['#0072B2'])
-            
             st.plotly_chart(fig_trend, use_container_width=True)
 
         with tab3:
@@ -162,11 +157,9 @@ if not df_log_raw.empty:
             col_w1, col_w2 = st.columns(2)
             with col_w1:
                 st.subheader("⚠️ 不動在庫分析")
-                # 不動在庫は常に最新の状態（全期間）で見たいが、商品・サイズ絞り込みには連動させる
                 df_dead_base = df_out_all.copy()
                 if sel_item != "すべて表示": df_dead_base = df_dead_base[df_dead_base["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_dead_base = df_dead_base[df_dead_base["サイズ"] == sel_size]
-                
                 now = pd.Timestamp.now()
                 dead_stock = df_dead_base.groupby("項目詳細")["日時"].max().reset_index()
                 dead_stock = dead_stock.rename(columns={"日時": "最終出荷日"})
