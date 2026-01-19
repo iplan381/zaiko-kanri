@@ -184,6 +184,14 @@ if selected_indices:
             # 変更内容をリストアップして見せる
             for idx, p in update_payload.items():
                 row = p["orig_data"]
+
+            # 確認画面だけで使うアイコンのマッピング
+                icon = ""
+                if p["type"] == "入庫": icon = "📦"
+                elif p["type"] == "出庫": icon = "🚚"
+                elif p["type"] == "予約出庫": icon = "📅"
+                elif p["type"] == "調整": icon = "🔧"
+                
                 # 入庫/出庫などのアクションと数量
                 action = f"{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
                 # 地名を表示（変更がある場合は新旧両方表示するとミスが防げる）
