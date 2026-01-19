@@ -8,7 +8,8 @@ from io import StringIO
 
 # --- 0. 基本関数 ---
 def get_now_jst():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
+    # 秒まで含めるフォーマットに修正
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 # --- 1. 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri" 
@@ -23,32 +24,27 @@ USERS = ["佐藤", "手塚", "檀原"]
 
 st.set_page_config(page_title="在庫管理システム", layout="wide")
 
-# --- 2. GitHub連携関数 (超強力キャッシュ回避版) ---
+# --- 2. GitHub連携関数 (混合フォーマット・キャッシュ対応) ---
 def get_github_data(file_path):
-    # ナノ秒単位のタイムスタンプを付与し、GitHubのキャッシュを完全に無効化する
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}?t={time.time_ns()}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
+        "Cache-Control": "no-cache"
     }
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
         content = res.json()
         csv_text = base64.b64decode(content["content"]).decode("utf-8")
-        # 読み込み時に全て文字列(str)として扱う
         df = pd.read_csv(StringIO(csv_text), dtype=str)
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
 def update_github_data(file_path, df, message):
-    # 保存直前に「本当の最新のsha」を取得し直す
     _, latest_sha = get_github_data(file_path)
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     
-    # 数値を整数に固定
+    # 保存前に数値を整数に固定
     for col in ["在庫数", "アラート基準", "数量"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
@@ -62,11 +58,12 @@ def update_github_data(file_path, df, message):
     res = requests.put(url, headers=headers, json=data)
     return res.status_code in [200, 201]
 
-# データの読み込みと初期化
+# データの読み込み
 df_stock, _ = get_github_data(FILE_PATH_STOCK)
 df_log, _ = get_github_data(FILE_PATH_LOG)
 df_res_all, _ = get_github_data(FILE_PATH_RESERVATION)
 
+# 数値変換
 def to_int(df, cols):
     for c in cols:
         if c in df.columns:
@@ -205,13 +202,13 @@ if selected_indices:
 else:
     st.info("💡 一覧から商品を選択してください")
 
-# --- 6. 履歴表示 ---
+# --- 6. 履歴表示 (混合フォーマット対応) ---
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
     df_l = df_log.copy()
-    # 日付エラー回避
-    df_l["日時_dt"] = pd.to_datetime(df_l["日時"], errors='coerce')
+    # format='mixed' で秒あり・なしが混ざっていても読み込むように修正
+    df_l["日時_dt"] = pd.to_datetime(df_l["日時"], errors='coerce', format='mixed')
     df_l = df_l.dropna(subset=["日時_dt"]).sort_values("日時_dt", ascending=False)
     
     cl1, cl2, cl3 = st.columns(3)
