@@ -176,38 +176,54 @@ if selected_indices:
                 with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
                 update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
 
-        if st.button("🔄 全ての変更を確定する", type="primary", use_container_width=True):
-            now, new_logs, new_reservations = get_now_jst(), [], []
+        # 1. 確認用ポップアップ（ダイアログ）の定義
+        @st.dialog("操作内容の最終確認")
+        def confirm_dialog():
+            st.warning("⚠️ 以下の内容で在庫を更新します。よろしいですか？")
+            
+            # 変更内容をリストアップして見せる
             for idx, p in update_payload.items():
                 row = p["orig_data"]
-                target_mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
-                if target_mask.any():
-                    orig_idx = df_stock[target_mask].index[0]
-                    if p["delete"]:
-                        df_stock = df_stock.drop(orig_idx)
-                        new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "在庫数": 0, "担当者": user_name})
-                    elif p["type"] == "予約出庫" and p["qty"] > 0:
-                        new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
-                    elif p["type"] != "変更なし":
-                        if p["type"] == "入庫" or p["type"] == "調整":
-                            df_stock.at[orig_idx, "在庫数"] += p["qty"]
-                        elif p["type"] == "出庫":
-                            df_stock.at[orig_idx, "在庫数"] -= p["qty"]
-        
-                        df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "アラート基準"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
-                        
-                        curr_stock = df_stock.at[orig_idx, "在庫数"]
-                        if p["qty"] != 0: 
-                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": curr_stock, "担当者": user_name})
-                        if p["loc"] != row["地名"]: 
-                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "在庫数": curr_stock, "担当者": user_name})
+                action = f"{p['type']} ({p['qty']})" if not p["delete"] else "🔥 削除"
+                st.write(f"・**{row['商品名']}** ({row['サイズ']}) : {action}")
+
+            st.divider()
+            if st.button("はい、確定します", type="primary", use_container_width=True):
+                # 実際の更新処理を実行
+                now = get_now_jst()
+                new_logs, new_reservations = [], []
                 
-            update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update")
-            if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
-            if new_reservations:
-                df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
-                update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
-            st.rerun()
+                # 更新ロジック（ここが君の元の確定処理）
+                current_df_stock = df_stock.copy() # ループ内で参照・更新するためコピー
+                for idx, p in update_payload.items():
+                    row = p["orig_data"]
+                    target_mask = (current_df_stock["商品名"] == row["商品名"]) & (current_df_stock["サイズ"] == row["サイズ"]) & (current_df_stock["地名"] == row["地名"])
+                    if target_mask.any():
+                        orig_idx = current_df_stock[target_mask].index[0]
+                        if p["delete"]:
+                            current_df_stock = current_df_stock.drop(orig_idx)
+                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "在庫数": 0, "担当者": user_name})
+                        elif p["type"] == "予約出庫" and p["qty"] > 0:
+                            new_reservations.append({"予約日": p["res_date"], "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
+                        elif p["type"] != "変更なし":
+                            if p["type"] == "入庫" or p["type"] == "調整": current_df_stock.at[orig_idx, "在庫数"] += p["qty"]
+                            elif p["type"] == "出庫": current_df_stock.at[orig_idx, "在庫数"] -= p["qty"]
+                            current_df_stock.at[orig_idx, "地名"], current_df_stock.at[orig_idx, "アラート基準"], current_df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
+                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": current_df_stock.at[orig_idx, "在庫数"], "担当者": user_name})
+                
+                # GitHub更新
+                update_github_data(FILE_PATH_STOCK, current_df_stock, sha_stock, "Batch Update")
+                if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
+                if new_reservations:
+                    df_res_old, sha_res_p = get_github_data(FILE_PATH_RESERVATION)
+                    update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res_p, "Add Reservation")
+                
+                st.success("更新完了！")
+                st.rerun()
+
+        # 2. 画面上のボタン（これを押すと上のダイアログが開く）
+        if st.button("🔄 変更内容を確定する", type="primary", use_container_width=True):
+            confirm_dialog()
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
 
