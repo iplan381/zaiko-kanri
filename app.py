@@ -264,14 +264,19 @@ st.divider()
 st.subheader("📜 入出庫履歴")
 
 if not df_log.empty:
-    # 1. フィルター設置
-    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2]) # 配置バランス調整
+    # 1. データのクリーンアップ（エラー対策）
+    # 日時に変換できないデータがあってもエラーにせず、無視するように設定します
+    df_log["日時"] = pd.to_datetime(df_log["日時"], errors='coerce')
+    # 日時が空になってしまった行（変換エラー行）を除外
+    df_log = df_log.dropna(subset=["日時"])
+
+    # フィルター設置
+    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2])
     
     with col_log1:
-        df_log["日時"] = pd.to_datetime(df_log["日時"])
-        min_date, max_date = df_log["日時"].min().date(), df_log["日時"].max().date()
+        min_date = df_log["日時"].min().date()
+        max_date = df_log["日時"].max().date()
         log_date_range = st.date_input("期間", value=(min_date, max_date), key="log_date_filter")
-    
     # 【修正ポイント】履歴専用の絞り込みを追加
     with col_log2:
         l_item = st.selectbox("履歴検索:商品名", get_opts(df_log["商品名"]), key="log_f_item")
