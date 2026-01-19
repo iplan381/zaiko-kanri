@@ -191,7 +191,7 @@ if selected_indices:
                 # 確認画面だけアイコンを表示
                 icon = {"入庫": "📦", "出庫": "🚚", "予約出庫": "📅", "調整": "🔧"}.get(p["type"], "")
                 action_text = f"{icon}{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
-                loc_info = f"@{p['loc']}" if p['loc'] == row['地名'] else f"@{row['地名']} ➡ {p['loc']}"
+                loc_info = f"{p['loc']}" if p['loc'] == row['地名'] else f"{row['地名']} ➡ {p['loc']}"
                 st.write(f"・**{row['商品名']}** ({row['サイズ']}) {loc_info} ： {action_text}")
 
             st.divider()
