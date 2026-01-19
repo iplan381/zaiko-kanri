@@ -154,9 +154,9 @@ if selected_indices:
                     if p['delete']:
                         action_str = "🗑️ 【削除】"
                     elif p['type'] == "予約出庫":
-                        action_str = f"📅 【予約】 {p['qty']}件 ({p['res_date']})"
+                        action_str = f"📅 【予約】 {p['qty']}c/s ({p['res_date']})"
                     else:
-                        action_str = f"📦 【{p['type']}】 {p['qty']}件"
+                        action_str = f"📦 【{p['type']}】 {p['qty']}c/s"
                     
                     st.write(f"・{p['orig_data']['商品名']} ({p['orig_data']['サイズ']}/{p['loc']}) : {action_str}")
                 
