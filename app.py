@@ -317,7 +317,7 @@ if not df_log.empty:
         df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
         use_container_width=True, hide_index=True,
         column_config={
-            "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
+           "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm:ss"),
             "数量": st.column_config.NumberColumn("数", format="%d"),
             "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
         }
