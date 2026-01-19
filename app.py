@@ -79,7 +79,6 @@ def get_opts(series):
 
 def highlight_alert(row):
     styles = [''] * len(row)
-    # アラート判定を「有効在庫」で行う
     if "有効在庫" in row.index and row["有効在庫"] < row["アラート基準"]:
         return ['background-color: #d9534f; color: white'] * len(row)
     return styles
@@ -163,7 +162,6 @@ if selected_indices:
                 col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
                 with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True, key=f"type_{i}")
                 with col2:
-                    # 調整の時だけマイナスを許可、それ以外は0以上の制限をかける
                     if m_type == "調整":
                         m_qty = st.number_input("数量", value=0, key=f"qty_{i}")
                     else:
@@ -171,14 +169,14 @@ if selected_indices:
                 with col3:
                     if m_type == "予約出庫":
                         res_date = st.date_input("予約日", value=dt.date.today() + dt.timedelta(days=1), key=f"date_{i}")
+                        new_loc = row['地名']
                     else:
                         new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
                 with col4: new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
                 with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
-                update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc if m_type != "予約出庫" else row['地名'], "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
+                update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
 
         if st.button("🔄 全ての変更を確定する", type="primary", use_container_width=True):
-            st.session_state.last_user = user_name
             now, new_logs, new_reservations = get_now_jst(), [], []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
@@ -213,44 +211,27 @@ if selected_indices:
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
 
-# --- 6. 予約・履歴（縦並びに変更） ---
+# --- 6. 予約・履歴 ---
 st.divider()
 
 # --- A. 出庫予約リスト ---
 st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
-    # --- 修正ポイント：絞り込み前の全在庫データ(all_stocks)を作成して紐付ける ---
-    # メインの df_disp は検索で中身が減るため、ここでは使いません
     res_sum_all = df_res_all.groupby(["商品名", "サイズ", "地名"])["数量"].sum().reset_index().rename(columns={"数量": "予約計"})
     all_stocks = pd.merge(df_stock, res_sum_all, on=["商品名", "サイズ", "地名"], how="left").fillna({"予約計": 0})
     all_stocks["有効在庫"] = all_stocks["在庫数"] - all_stocks["予約計"]
 
-    # 予約データに、この「全在庫データ」を紐付ける
-    df_rv = pd.merge(
-        df_res_all, 
-        all_stocks[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], 
-        on=["商品名", "サイズ", "地名"], 
-        how="left"
-    ).fillna({"在庫数": 0, "有効在庫": 0})
+    df_rv = pd.merge(df_res_all, all_stocks[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], on=["商品名", "サイズ", "地名"], how="left").fillna({"在庫数": 0, "有効在庫": 0})
     
-    # 予約リスト専用の絞り込み（これは残しておきます）
     res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
     if res_filter_item != "すべて":
         df_rv = df_rv[df_rv["商品名"] == res_filter_item]
 
-    # 予約日の表示設定
     df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
-    
-    # 表示する列（地名とサイズも入っています）
     res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "有効在庫", "担当者"]
 
-    # リスト表示
     res_event = st.dataframe(
-        df_rv[res_disp_cols].sort_values("予約日"),
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="multi-row",
+        df_rv[res_disp_cols].sort_values("予約日"), use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row",
         column_config={
             "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
             "数量": st.column_config.NumberColumn("予約数", format="%d"),
@@ -259,12 +240,10 @@ if not df_res_all.empty:
         }
     )
     
-    # 個別編集パネル
     selected_rows = res_event.selection.rows
     if selected_rows:
         st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_rows)}件) を編集")
         df_target = df_rv.sort_values("予約日").iloc[selected_rows]
-        
         res_updates = {}
         for i, row in df_target.iterrows():
             orig_idx = row.name
@@ -285,63 +264,58 @@ if not df_res_all.empty:
             if indices_to_drop:
                 new_df_res = new_df_res.drop(indices_to_drop)
             update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update Fix")
-            st.success("予約を更新しました")
             st.rerun()
-    else:
-        st.info("💡 編集・削除したい予約の左側にチェックを入れてください。")
 else:
     st.write("現在予約はありません。")
 
-st.divider() # 予約と履歴の間に区切り線を入れる
+st.divider()
 
 # --- B. 入出庫履歴 ---
 st.subheader("📜 入出庫履歴")
 
 if not df_log.empty:
     # 1. フィルター設置
-    col_log1, col_log2 = st.columns(2)
+    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2]) # 配置バランス調整
+    
     with col_log1:
         df_log["日時"] = pd.to_datetime(df_log["日時"])
-        min_date = df_log["日時"].min().date()
-        max_date = df_log["日時"].max().date()
-        log_date_range = st.date_input("期間選択", value=(min_date, max_date), key="log_date_filter")
+        min_date, max_date = df_log["日時"].min().date(), df_log["日時"].max().date()
+        log_date_range = st.date_input("期間", value=(min_date, max_date), key="log_date_filter")
+    
+    # 【修正ポイント】履歴専用の絞り込みを追加
     with col_log2:
-        # 1. すべての区分を取得し、除外したい項目を取り除く
-        all_types_raw = sorted(df_log["区分"].unique())
-        exclude_list = ["基準変更", "編集"]
-        # 除外リストにないものだけを候補にする（「すべて」という項目は今回不要になります）
-        selectable_types = [t for t in all_types_raw if t not in exclude_list and str(t).strip() != ""]
-        
-        # 2. 複数選択(multiselect)に変更
-        selected_types = st.multiselect(
-            "区分の絞り込み（複数選択可）", 
-            options=selectable_types,
-            default=[], # 最初は何も選択しない（＝全表示）にしたい場合は空リスト
-            key="log_type_filter"
-        )
+        l_item = st.selectbox("履歴検索:商品名", get_opts(df_log["商品名"]), key="log_f_item")
+    with col_log3:
+        l_size = st.selectbox("履歴検索:サイズ", get_opts(df_log["サイズ"]), key="log_f_size")
+    with col_log4:
+        # 地名は種類が多い可能性があるため、全件取得して選択肢にする
+        l_loc = st.selectbox("履歴検索:地名", get_opts(df_log["地名"]), key="log_f_loc")
+    
+    with col_log5:
+        all_types = [t for t in sorted(df_log["区分"].unique()) if t not in ["基準変更", "編集"] and str(t).strip() != ""]
+        selected_types = st.multiselect("区分（複数可）", options=all_types, key="log_type_filter")
 
     # 2. データの絞り込み実行
     df_log_filtered = df_log.copy()
     
-    # 日付で絞り込み
+    # 日付フィルタ
     if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
-        start_date, end_date = log_date_range
-        df_log_filtered = df_log_filtered[
-            (df_log_filtered["日時"].dt.date >= start_date) & 
-            (df_log_filtered["日時"].dt.date <= end_date)
-        ]
+        df_log_filtered = df_log_filtered[(df_log_filtered["日時"].dt.date >= log_date_range[0]) & (df_log_filtered["日時"].dt.date <= log_date_range[1])]
     
-    # 3. 複数選択された区分で絞り込み（選択がある場合のみ実行）
+    # 【修正ポイント】商品名・サイズ・地名フィルタ
+    if l_item != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["商品名"] == l_item]
+    if l_size != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["サイズ"] == l_size]
+    if l_loc != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["地名"] == l_loc]
+    
+    # 区分フィルタ
     if selected_types:
         df_log_filtered = df_log_filtered[df_log_filtered["区分"].isin(selected_types)]
 
-   # 3. 履歴の表示
+    # 3. 履歴の表示
     disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
-    
     st.dataframe(
         df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
-        use_container_width=True,
-        hide_index=True,
+        use_container_width=True, hide_index=True,
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
             "数量": st.column_config.NumberColumn("数", format="%d"),
