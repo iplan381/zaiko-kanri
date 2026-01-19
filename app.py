@@ -23,32 +23,28 @@ USERS = ["佐藤", "手塚", "檀原"]
 
 st.set_page_config(page_title="在庫管理システム", layout="wide")
 
-# --- 2. GitHub連携関数 (最新安定版・キャッシュ対策) ---
+# --- 2. GitHub連携関数 (キャッシュ・エラー対策版) ---
 def get_github_data(file_path):
-    # 秒単位のタイムスタンプをURLに付与して、GitHubのキャッシュを強制回避する
+    # 強力なキャッシュ回避
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}?t={int(time.time())}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
+        "Cache-Control": "no-cache"
     }
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
         content = res.json()
         csv_text = base64.b64decode(content["content"]).decode("utf-8")
-        # 読み込み時に全て文字列(str)として扱うことで勝手な型変換(1.0など)を防ぐ
         df = pd.read_csv(StringIO(csv_text), dtype=str)
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
 def update_github_data(file_path, df, message):
-    # 保存直前に「本当の最新のsha」を取得し直す（コンフリクト対策）
     _, latest_sha = get_github_data(file_path)
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     
-    # 保存時に小数点が絶対に出ないよう整数にしてからCSV化
+    # 保存前に数値を整数に固定（小数点を消す）
     for col in ["在庫数", "アラート基準", "数量"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
@@ -62,12 +58,11 @@ def update_github_data(file_path, df, message):
     res = requests.put(url, headers=headers, json=data)
     return res.status_code in [200, 201]
 
-# 初回データ読み込み
+# データ読み込みと整数化
 df_stock, _ = get_github_data(FILE_PATH_STOCK)
 df_log, _ = get_github_data(FILE_PATH_LOG)
 df_res_all, _ = get_github_data(FILE_PATH_RESERVATION)
 
-# 数値列の安全な変換（小数点抹殺）
 def to_int(df, cols):
     for c in cols:
         if c in df.columns:
@@ -117,7 +112,6 @@ with c3: search_loc = st.text_input("検索:地名（手入力）", placeholder=
 with c4: s_vendor = st.selectbox("検索:取引先", get_opts(df_stock["取引先"]))
 
 df_disp = df_stock.copy()
-# 予約計算
 if not df_res_all.empty:
     res_sum = df_res_all.groupby(["商品名", "サイズ", "地名"])["数量"].sum().reset_index().rename(columns={"数量": "予約計"})
     df_disp = pd.merge(df_disp, res_sum, on=["商品名", "サイズ", "地名"], how="left").fillna({"予約計": 0})
@@ -126,7 +120,6 @@ else:
 
 df_disp["有効在庫"] = (df_disp["在庫数"] - df_disp["予約計"]).astype(int)
 
-# フィルタリング
 if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
 if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
 if search_loc.strip(): df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
@@ -139,17 +132,16 @@ event = st.dataframe(
     use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row",
     column_config={
         "在庫数": st.column_config.NumberColumn("実在庫", format="%d"),
-        "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d"),
-        "アラート基準": st.column_config.NumberColumn("アラート", format="%d")
+        "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d")
     }
 )
 
-# --- 5. 操作パネル ---
+# --- 5. 操作パネル (ダイアログ表示修正) ---
 st.divider()
 selected_indices = event.selection.rows
 if selected_indices:
     selected_data = df_show.iloc[selected_indices]
-    st.markdown(f"### 📋 {len(selected_data)} 件の一括操作")
+    st.markdown(f"### 📋 {len(selected_data)} 件を一括操作")
     user_name = st.selectbox("担当者を選んでください", ["-- 選択 --"] + USERS)
     
     if user_name != "-- 選択 --":
@@ -170,9 +162,16 @@ if selected_indices:
                 update_payload[i] = {"type": m_type, "qty": int(m_qty), "loc": new_l, "alert": int(new_a), "delete": is_del, "res_date": res_d if m_type=="予約出庫" else None, "orig": row}
 
         if st.button("🔄 全ての変更を確定する", type="primary", use_container_width=True):
+            st.session_state.current_payload = update_payload
+            
             @st.dialog("最終確認")
-            def confirm_dialog(payloads):
-                st.warning("この内容で保存します。")
+            def confirm_dialog():
+                payloads = st.session_state.get('current_payload', {})
+                st.warning("以下の内容で保存します。")
+                for idx, p in payloads.items():
+                    act = "🗑️ 削除" if p['delete'] else f"📦 {p['type']} ({p['qty']})"
+                    st.write(f"・**{p['orig']['商品名']}** ({p['orig']['サイズ']}/{p['loc']}) → {act}")
+                
                 if st.button("はい、確定します", type="primary", use_container_width=True):
                     now, new_l_list, new_r_list = get_now_jst(), [], []
                     temp_stock = df_stock.copy()
@@ -198,20 +197,19 @@ if selected_indices:
                             update_github_data(FILE_PATH_RESERVATION, pd.concat([d_r, pd.DataFrame(new_r_list)], ignore_index=True), "Res Update")
                         st.success("更新しました！")
                         st.rerun()
-            confirm_dialog(update_payload)
+            confirm_dialog()
 else:
     st.info("💡 一覧から商品を選択してください")
 
-# --- 6. 履歴表示 (小数点を完全に排除) ---
+# --- 6. 履歴表示 (エラー対策版) ---
 st.divider()
 st.subheader("📜 入出庫履歴")
 if not df_log.empty:
     df_l = df_log.copy()
-    # 日時変換
+    # errors='coerce' で、壊れた日付データがあってもクラッシュさせない
     df_l["日時_dt"] = pd.to_datetime(df_l["日時"], errors='coerce')
     df_l = df_l.dropna(subset=["日時_dt"]).sort_values("日時_dt", ascending=False)
     
-    # フィルタ
     cl1, cl2, cl3 = st.columns(3)
     with cl1: l_item = st.selectbox("履歴:商品名", get_opts(df_l["商品名"]), key="l_i")
     with cl2: l_loc = st.selectbox("履歴:地名", get_opts(df_l["地名"]), key="l_l")
@@ -221,7 +219,6 @@ if not df_log.empty:
     if l_loc != "すべて": df_l = df_l[df_l["地名"] == l_loc]
     if l_type: df_l = df_l[df_l["区分"].isin(l_type)]
     
-    # 表示（format="%d" で小数点禁止）
     st.dataframe(
         df_l[["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]],
         use_container_width=True, hide_index=True,
