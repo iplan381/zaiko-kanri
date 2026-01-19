@@ -187,7 +187,7 @@ if selected_indices:
                 # 入庫/出庫などのアクションと数量
                 action = f"{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
                 # 地名を表示（変更がある場合は新旧両方表示するとミスが防げる）
-                loc_info = f"@{p['loc']}" if p['loc'] == row['地名'] else f"@{row['地名']} ➡ {p['loc']}"
+                loc_info = f"{p['loc']}" if p['loc'] == row['地名'] else f"{row['地名']} ➡ {p['loc']}"
                 
                 st.write(f"・**{row['商品名']}** ({row['サイズ']}) {loc_info} ： {action}")
 
