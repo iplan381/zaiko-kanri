@@ -154,9 +154,9 @@ if selected_indices:
                     if p['delete']:
                         action_str = "🗑️ 【削除】"
                     elif p['type'] == "予約出庫":
-                        action_str = f"📅 【予約】 {p['qty']}c/s ({p['res_date']})"
+                        action_str = f"📅 【予約】 {p['qty']}件 ({p['res_date']})"
                     else:
-                        action_str = f"📦 【{p['type']}】 {p['qty']}c/s"
+                        action_str = f"📦 【{p['type']}】 {p['qty']}件"
                     
                     st.write(f"・{p['orig_data']['商品名']} ({p['orig_data']['サイズ']}/{p['loc']}) : {action_str}")
                 
@@ -264,50 +264,47 @@ st.divider()
 st.subheader("📜 入出庫履歴")
 
 if not df_log.empty:
-    # --- 修正: 読み込みデータのコピーを作成して表示用に加工する ---
-    df_log_display = df_log.copy()
-    
-    # 全ての列を文字列に変換してから、空の行を削除（GitHub由来のゴミ対策）
-    df_log_display = df_log_display.replace("", pd.NA).dropna(how='all')
-    
-    # 日時を表示用に変換（エラーは無視せず、不正なものはNaTにする）
-    df_log_display["日時"] = pd.to_datetime(df_log_display["日時"], errors='coerce')
-    
-    # 万が一、日時の変換に失敗した行があれば削除（表示用のみ）
-    df_log_display = df_log_display.dropna(subset=["日時"])
-
-    # フィルター設置
-    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2])
+    # 1. フィルター設置
+    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2]) # 配置バランス調整
     
     with col_log1:
-        min_date = df_log_display["日時"].min().date()
-        max_date = df_log_display["日時"].max().date()
+        df_log["日時"] = pd.to_datetime(df_log["日時"])
+        min_date, max_date = df_log["日時"].min().date(), df_log["日時"].max().date()
         log_date_range = st.date_input("期間", value=(min_date, max_date), key="log_date_filter")
     
+    # 【修正ポイント】履歴専用の絞り込みを追加
     with col_log2:
-        l_item = st.selectbox("履歴検索:商品名", get_opts(df_log_display["商品名"]), key="log_f_item")
+        l_item = st.selectbox("履歴検索:商品名", get_opts(df_log["商品名"]), key="log_f_item")
     with col_log3:
-        l_size = st.selectbox("履歴検索:サイズ", get_opts(df_log_display["サイズ"]), key="log_f_size")
+        l_size = st.selectbox("履歴検索:サイズ", get_opts(df_log["サイズ"]), key="log_f_size")
     with col_log4:
-        l_loc = st.selectbox("履歴検索:地名", get_opts(df_log_display["地名"]), key="log_f_loc")
-    with col_log5:
-        all_types = [t for t in sorted(df_log_display["区分"].unique()) if t not in ["基準変更", "編集"] and str(t).strip() != ""]
-        selected_types = st.multiselect("区分", options=all_types, key="log_type_filter")
-
-    # 絞り込み実行
-    if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
-        df_log_display = df_log_display[(df_log_display["日時"].dt.date >= log_date_range[0]) & (df_log_display["日時"].dt.date <= log_date_range[1])]
+        # 地名は種類が多い可能性があるため、全件取得して選択肢にする
+        l_loc = st.selectbox("履歴検索:地名", get_opts(df_log["地名"]), key="log_f_loc")
     
-    if l_item != "すべて": df_log_display = df_log_display[df_log_display["商品名"] == l_item]
-    if l_size != "すべて": df_log_display = df_log_display[df_log_display["サイズ"] == l_size]
-    if l_loc != "すべて": df_log_display = df_log_display[df_log_display["地名"] == l_loc]
-    if selected_types:
-        df_log_display = df_log_display[df_log_display["区分"].isin(selected_types)]
+    with col_log5:
+        all_types = [t for t in sorted(df_log["区分"].unique()) if t not in ["基準変更", "編集"] and str(t).strip() != ""]
+        selected_types = st.multiselect("区分（複数可）", options=all_types, key="log_type_filter")
 
-    # 表示
+    # 2. データの絞り込み実行
+    df_log_filtered = df_log.copy()
+    
+    # 日付フィルタ
+    if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
+        df_log_filtered = df_log_filtered[(df_log_filtered["日時"].dt.date >= log_date_range[0]) & (df_log_filtered["日時"].dt.date <= log_date_range[1])]
+    
+    # 【修正ポイント】商品名・サイズ・地名フィルタ
+    if l_item != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["商品名"] == l_item]
+    if l_size != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["サイズ"] == l_size]
+    if l_loc != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["地名"] == l_loc]
+    
+    # 区分フィルタ
+    if selected_types:
+        df_log_filtered = df_log_filtered[df_log_filtered["区分"].isin(selected_types)]
+
+    # 3. 履歴の表示
     disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
     st.dataframe(
-        df_log_display[disp_log_cols].sort_values("日時", ascending=False),
+        df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
         use_container_width=True, hide_index=True,
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
