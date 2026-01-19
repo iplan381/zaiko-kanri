@@ -176,28 +176,28 @@ if selected_indices:
                 with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
                 update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
 
-        # 1. 確認用ポップアップ（ダイアログ）の定義
-       @st.dialog("操作内容の最終確認")
-        def confirm_dialog():
-            st.warning("⚠️ 以下の内容で在庫を更新します。よろしいですか？")
-            
-            for idx, p in update_payload.items():
-                row = p["orig_data"]
+            # 1. 確認用ポップアップ（ダイアログ）の定義
+           @st.dialog("操作内容の最終確認")
+            def confirm_dialog():
+                st.warning("⚠️ 以下の内容で在庫を更新します。よろしいですか？")
                 
-                # 確認画面だけで使うアイコンのマッピング
-                icon = ""
-                if p["type"] == "入庫": icon = "📦"
-                elif p["type"] == "出庫": icon = "🚚"
-                elif p["type"] == "予約出庫": icon = "📅"
-                elif p["type"] == "調整": icon = "🔧"
-                
-                # 表示の組み立て
-                action_text = f"{icon}{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
-                loc_info = f"@{p['loc']}" if p['loc'] == row['地名'] else f"@{row['地名']} ➡ {p['loc']}"
-                
-                st.write(f"・**{row['商品名']}** ({row['サイズ']}) {loc_info} ： {action_text}")
-
-            st.divider()
+                for idx, p in update_payload.items():
+                    row = p["orig_data"]
+                    
+                    # 確認画面だけで使うアイコンのマッピング
+                    icon = ""
+                    if p["type"] == "入庫": icon = "📦"
+                    elif p["type"] == "出庫": icon = "🚚"
+                    elif p["type"] == "予約出庫": icon = "📅"
+                    elif p["type"] == "調整": icon = "🔧"
+                    
+                    # 表示の組み立て
+                    action_text = f"{icon}{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
+                    loc_info = f"@{p['loc']}" if p['loc'] == row['地名'] else f"@{row['地名']} ➡ {p['loc']}"
+                    
+                    st.write(f"・**{row['商品名']}** ({row['サイズ']}) {loc_info} ： {action_text}")
+    
+                st.divider()
             if st.button("はい、確定します", type="primary", use_container_width=True):
                 # 実際の更新処理を実行
                 now = get_now_jst()
