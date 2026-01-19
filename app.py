@@ -174,37 +174,32 @@ if selected_indices:
                         new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
                 with col4: new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
                 with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
-                update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
-
-            # 1. 確認用ポップアップ（ダイアログ）の定義
-           @st.dialog("操作内容の最終確認")
-            def confirm_dialog():
-                st.warning("⚠️ 以下の内容で在庫を更新します。よろしいですか？")
                 
-                for idx, p in update_payload.items():
-                    row = p["orig_data"]
-                    
-                    # 確認画面だけで使うアイコンのマッピング
-                    icon = ""
-                    if p["type"] == "入庫": icon = "📦"
-                    elif p["type"] == "出庫": icon = "🚚"
-                    elif p["type"] == "予約出庫": icon = "📅"
-                    elif p["type"] == "調整": icon = "🔧"
-                    
-                    # 表示の組み立て
-                    action_text = f"{icon}{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
-                    loc_info = f"@{p['loc']}" if p['loc'] == row['地名'] else f"@{row['地名']} ➡ {p['loc']}"
-                    
-                    st.write(f"・**{row['商品名']}** ({row['サイズ']}) {loc_info} ： {action_text}")
-    
-                st.divider()
+                update_payload[i] = {
+                    "type": m_type, "qty": m_qty, "loc": new_loc, 
+                    "alert": new_alert, "delete": is_delete, 
+                    "res_date": res_date if m_type == "予約出庫" else None, 
+                    "orig_data": row
+                }
+
+        # --- 確認ダイアログの定義 (インデントに注意) ---
+        @st.dialog("操作内容の最終確認")
+        def confirm_dialog():
+            st.warning("⚠️ 以下の内容で在庫を更新します。よろしいですか？")
+            for idx, p in update_payload.items():
+                row = p["orig_data"]
+                # 確認画面だけアイコンを表示
+                icon = {"入庫": "📦", "出庫": "🚚", "予約出庫": "📅", "調整": "🔧"}.get(p["type"], "")
+                action_text = f"{icon}{p['type']}: {p['qty']}" if not p["delete"] else "🔥 削除"
+                loc_info = f"@{p['loc']}" if p['loc'] == row['地名'] else f"@{row['地名']} ➡ {p['loc']}"
+                st.write(f"・**{row['商品名']}** ({row['サイズ']}) {loc_info} ： {action_text}")
+
+            st.divider()
             if st.button("はい、確定します", type="primary", use_container_width=True):
-                # 実際の更新処理を実行
                 now = get_now_jst()
                 new_logs, new_reservations = [], []
+                current_df_stock = df_stock.copy()
                 
-                # 更新ロジック（ここが君の元の確定処理）
-                current_df_stock = df_stock.copy() # ループ内で参照・更新するためコピー
                 for idx, p in update_payload.items():
                     row = p["orig_data"]
                     target_mask = (current_df_stock["商品名"] == row["商品名"]) & (current_df_stock["サイズ"] == row["サイズ"]) & (current_df_stock["地名"] == row["地名"])
@@ -221,18 +216,15 @@ if selected_indices:
                             current_df_stock.at[orig_idx, "地名"], current_df_stock.at[orig_idx, "アラート基準"], current_df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
                             new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": current_df_stock.at[orig_idx, "在庫数"], "担当者": user_name})
                 
-                # GitHub更新
                 update_github_data(FILE_PATH_STOCK, current_df_stock, sha_stock, "Batch Update")
                 if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
                 if new_reservations:
                     df_res_old, sha_res_p = get_github_data(FILE_PATH_RESERVATION)
                     update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res_p, "Add Reservation")
-                
                 st.success("更新完了！")
                 st.rerun()
 
-        # 2. 画面上のボタン（これを押すと上のダイアログが開く）
-        if st.button("🔄 変更内容を確定する", type="primary", use_container_width=True):
+        if st.button("🔄 変更内容を確認する", type="primary", use_container_width=True):
             confirm_dialog()
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
