@@ -6,7 +6,7 @@ import requests
 from io import StringIO
 
 def get_now_jst():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 # --- 1. 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri" 
