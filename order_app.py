@@ -6,32 +6,16 @@ from datetime import datetime
 import io
 
 # --- 1. 設定：GitHubの情報を入力 ---
-REPO_NAME = "iplan381/zaiko-kanri"
+REPO_NAME = "iplan381/zaiko-kanri"  # REPOSITORY ではなく REPO_NAME にする
 FILE_PATH_ORDERS = "order_log.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- 2. GitHub連携関数 ---
+# --- 2. GitHub連携用関数（ここも REPO_NAME を使うように修正） ---
 def get_github_data(file_path):
-    url = f"https://api.github.com/repos/{REPOSITORY}/contents/{file_path}"
+    # url の中の {REPOSITORY} を {REPO_NAME} に書き換える
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = res.json()
-        csv_data = base64.b64decode(content["content"]).decode("utf-8")
-        return pd.read_csv(io.StringIO(csv_data)), content["sha"]
-    else:
-        # ファイルがない場合の予備
-        cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
-        return pd.DataFrame(columns=cols), None
-
-def update_github_data(file_path, df, sha, message):
-    url = f"https://api.github.com/repos/{REPOSITORY}/contents/{file_path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    csv_content = df.to_csv(index=False)
-    content_base64 = base64.b64encode(csv_content.encode("utf-8")).decode("utf-8")
-    data = {"message": message, "content": content_base64, "sha": sha}
-    res = requests.put(url, headers=headers, json=data)
-    return res.status_code
 
 # --- 3. 資材マスタ（現場に合わせて適宜変更） ---
 MASTER_DATA = {
