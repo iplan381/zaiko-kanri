@@ -97,16 +97,15 @@ if count > 0:
         </div>
     """, unsafe_allow_html=True)
 
-# 2. 【エリア1】発注処理待ち
+# 2. 【エリア1】発注処理待ち（ここだけは常に表示）
 st.subheader("📝 1. 発注処理待ち")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
-    # 修正：データフレームには全列渡しつつ、column_configでidを消し、不要な列を非表示にする
     edited_p = st.data_editor(
         pending_df, 
         hide_index=True, use_container_width=True, 
-        column_order=["選択", "category", "item_name", "product_name", "request_date"], # 表示順を固定
-        column_config={"id": None, "quantity": None, "vendor": None, "order_date": None, "delivery_date": None, "status": None}, # IDや空列を隠す
+        column_order=["選択", "category", "item_name", "product_name", "request_date"],
+        column_config={"id": None, "quantity": None, "vendor": None, "order_date": None, "delivery_date": None, "status": None},
         disabled=["category", "item_name", "product_name", "request_date"],
         key="pending_editor"
     )
@@ -133,40 +132,38 @@ if not pending_df.empty:
 else:
     st.info("現在、新規の依頼はありません。")
 
-st.divider()
+st.markdown("<br>", unsafe_allow_html=True) # 少し余白
 
-# 3. 【エリア2】発注済み（入荷待ち）
-st.subheader("🚚 2. 発注済み（入荷待ち）")
-if not ordered_df.empty:
-    ordered_df.insert(0, "入荷", False)
-    # 修正：column_orderで順番を制御し、column_configでidを内部保持しつつ隠す
-    edited_ordered = st.data_editor(
-        ordered_df,
-        hide_index=True, use_container_width=True,
-        column_order=["入荷", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "order_date"],
-        column_config={"id": None, "status": None, "request_date": None}, # IDを隠す
-        disabled=["category", "item_name", "product_name", "vendor", "order_date"],
-        key="ordered_editor"
-    )
-    
-    if st.button("✅ チェックした項目の納品を確認（完了へ）", type="primary", use_container_width=True):
-        for i, row in edited_ordered.iterrows():
-            orig_id = row["id"] # これで裏側のidを安全に取得できる！
-            idx = df_orders[df_orders["id"] == orig_id].index[0]
-            df_orders.at[idx, "quantity"] = row["quantity"]
-            df_orders.at[idx, "delivery_date"] = str(row["delivery_date"])
-            if row["入荷"]:
-                df_orders.at[idx, "status"] = "完了"
+# 3. 【エリア2】発注済み（入荷待ち）を折りたたみ化
+with st.expander(f"🚚 2. 発注済み・入荷待ち ({len(ordered_df)}件)", expanded=False):
+    if not ordered_df.empty:
+        ordered_df.insert(0, "入荷", False)
+        edited_ordered = st.data_editor(
+            ordered_df,
+            hide_index=True, use_container_width=True,
+            column_order=["入荷", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "order_date"],
+            column_config={"id": None, "status": None, "request_date": None},
+            disabled=["category", "item_name", "product_name", "vendor", "order_date"],
+            key="ordered_editor"
+        )
         
-        update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Delivery Confirmed")
-        st.toast("納品処理を確定しました！")
-        st.rerun()
-else:
-    st.write("現在、入荷待ちの資材はありません。")
+        if st.button("✅ チェックした項目の納品を確定", type="primary", use_container_width=True):
+            for i, row in edited_ordered.iterrows():
+                orig_id = row["id"]
+                idx = df_orders[df_orders["id"] == orig_id].index[0]
+                df_orders.at[idx, "quantity"] = row["quantity"]
+                df_orders.at[idx, "delivery_date"] = str(row["delivery_date"])
+                if row["入荷"]:
+                    df_orders.at[idx, "status"] = "完了"
+            update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Delivery Confirmed")
+            st.rerun()
+    else:
+        st.write("現在、入荷待ちの資材はありません。")
 
-st.divider()
-
-# 4. 【エリア3】完了履歴
-st.subheader("📑 3. 完了履歴（直近30件）")
+# 4. 【エリア3】完了履歴を折りたたみ化
 done_df = df_orders[df_orders['status'] == '完了'].sort_values("delivery_date", ascending=False)
-st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
+with st.expander(f"📑 3. 完了履歴 (直近{len(done_df.head(30))}件)", expanded=False):
+    if not done_df.empty:
+        st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
+    else:
+        st.write("完了した履歴はありません。")
