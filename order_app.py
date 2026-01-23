@@ -9,7 +9,9 @@ import io
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
 FILE_PATH_MASTER = "material_master.csv"
+FILE_PATH_VENDOR = "vendor_master.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+
 
 # --- 2. GitHub連携関数 ---
 def get_github_data(file_path, default_cols):
@@ -42,8 +44,10 @@ st.set_page_config(page_title="資材管理システム", layout="wide", page_ic
 # データ読み込み
 order_cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
 master_cols = ["category", "item_name", "product_name"]
+vendor_cols = ["vendor_name"]
 df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, order_cols)
 df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
+df_vendor, sha_vendor = get_github_data(FILE_PATH_VENDOR, vendor_cols)
 
 # 各ステータスのデータ抽出
 pending_df = df_orders[df_orders['status'] == '未対応'].copy()
@@ -85,6 +89,15 @@ with st.sidebar:
                     if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
                         st.toast(f"✅ 「{m_item}」を登録しました")
                         st.rerun()
+     with st.expander("🏢 発注先マスタ登録"):
+        with st.form("vendor_form", clear_on_submit=True):
+            v_name = st.text_input("発注先名（仕入先）")
+            if st.form_submit_button("発注先を追加", use_container_width=True):
+                if v_name:
+                    new_v_row = pd.DataFrame([{"vendor_name": v_name}])
+                    df_v_updated = pd.concat([df_vendor, new_v_row], ignore_index=True).drop_duplicates()
+                    update_github_data(FILE_PATH_VENDOR, df_v_updated, sha_vendor, "Update Vendor Master")
+                    st.rerun()                   
 
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
@@ -114,13 +127,17 @@ if not pending_df.empty:
     if selected_ids:
         with st.form("process_form"):
             payload = {}
+            vendor_list = df_vendor["vendor_name"].tolist() if not df_vendor.empty else []
             for sid in selected_ids:
                 row = pending_df[pending_df["id"] == sid].iloc[0]
                 st.markdown(f"**📍 {row['item_name']} ({row['product_name']})**")
                 c1, c2, c3 = st.columns(3)
                 payload[sid] = {
                     "qty": c1.number_input("数量", min_value=1, key=f"q_{sid}"), 
-                    "vendor": c2.text_input("発注先", key=f"v_{sid}"), 
+                   if vendor_list:
+                    vendor = c2.selectbox("発注先", vendor_list, key=f"v_{sid}")
+                   else:
+                    vendor = c2.text_input("発注先（マスタ未登録）", key=f"v_{sid}")
                     "date": c3.date_input("納品予定", key=f"d_{sid}")
                 }
             if st.form_submit_button("✅ チェックした項目を発注済みにする", use_container_width=True):
