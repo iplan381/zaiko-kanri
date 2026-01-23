@@ -185,5 +185,5 @@ with st.sidebar:
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
     else:
         st.info("選択された条件に該当するデータがありません。")
-else:
-    st.error("データの読み込みに失敗しました。")
+    else:
+        st.error("データの読み込みに失敗しました。")
