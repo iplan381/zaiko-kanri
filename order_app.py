@@ -52,7 +52,6 @@ count = len(pending_df)
 # --- 👈 サイドバー：新規発注依頼（ここをスッキリさせた！） ---
 with st.sidebar:
     st.title("➕ 新規発注依頼")
-    st.write("資材が必要な場合は、以下を選択して送信してください。")
     
     st.divider()
     
