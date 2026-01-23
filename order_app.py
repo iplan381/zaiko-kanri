@@ -71,6 +71,7 @@ with st.sidebar:
             if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
                 st.toast("✅ 依頼を送信しました！")
                 st.rerun()
+
     st.divider()
     with st.expander("⚙️ マスタ登録"):
         with st.form("master_form", clear_on_submit=True):
@@ -81,8 +82,9 @@ with st.sidebar:
                 if m_item and m_prod:
                     new_m_row = pd.DataFrame([{"category": m_cat, "item_name": m_item, "product_name": m_prod}])
                     df_m_updated = pd.concat([df_master, new_m_row], ignore_index=True).drop_duplicates()
-                    update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master")
-                    st.rerun()
+                    if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
+                        st.toast(f"✅ 「{m_item}」を登録しました")
+                        st.rerun()
 
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
@@ -96,20 +98,33 @@ if count > 0:
     """, unsafe_allow_html=True)
 
 # 2. 【エリア1】発注処理待ち
-st.subheader("📝 発注処理待ち")
+st.subheader("📝 1. 発注処理待ち")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
-    edited_p = st.data_editor(pending_df[["選択", "category", "item_name", "product_name", "request_date"]], hide_index=True, use_container_width=True, key="pending_editor")
+    # 修正：データフレームには全列渡しつつ、column_configでidを消し、不要な列を非表示にする
+    edited_p = st.data_editor(
+        pending_df, 
+        hide_index=True, use_container_width=True, 
+        column_order=["選択", "category", "item_name", "product_name", "request_date"], # 表示順を固定
+        column_config={"id": None, "quantity": None, "vendor": None, "order_date": None, "delivery_date": None, "status": None}, # IDや空列を隠す
+        disabled=["category", "item_name", "product_name", "request_date"],
+        key="pending_editor"
+    )
+    
     selected_ids = pending_df.loc[edited_p[edited_p["選択"] == True].index, "id"].tolist()
     if selected_ids:
         with st.form("process_form"):
             payload = {}
             for sid in selected_ids:
                 row = pending_df[pending_df["id"] == sid].iloc[0]
-                st.write(f"📍 {row['item_name']} ({row['product_name']})")
+                st.markdown(f"**📍 {row['item_name']} ({row['product_name']})**")
                 c1, c2, c3 = st.columns(3)
-                payload[sid] = {"qty": c1.number_input("数量", min_value=1, key=f"q_{sid}"), "vendor": c2.text_input("発注先", key=f"v_{sid}"), "date": c3.date_input("納品予定", key=f"d_{sid}")}
-            if st.form_submit_button("✅ チェックした項目を発注済みにする"):
+                payload[sid] = {
+                    "qty": c1.number_input("数量", min_value=1, key=f"q_{sid}"), 
+                    "vendor": c2.text_input("発注先", key=f"v_{sid}"), 
+                    "date": c3.date_input("納品予定", key=f"d_{sid}")
+                }
+            if st.form_submit_button("✅ チェックした項目を発注済みにする", use_container_width=True):
                 for oid, v in payload.items():
                     idx = df_orders[df_orders['id'] == oid].index[0]
                     df_orders.loc[idx, ["quantity","vendor","delivery_date","status","order_date"]] = [v['qty'], v['vendor'], str(v['date']), "発注済み", datetime.now().strftime("%Y-%m-%d")]
@@ -120,40 +135,38 @@ else:
 
 st.divider()
 
-# 3. 【エリア2】発注済み（入荷待ち・編集可能）
-st.subheader("🚚 発注済み")
+# 3. 【エリア2】発注済み（入荷待ち）
+st.subheader("🚚 2. 発注済み（入荷待ち）")
 if not ordered_df.empty:
-    st.caption("※数量や納品予定日はここで直接編集して保存できます。入荷したらチェックを入れて確定してください。")
     ordered_df.insert(0, "入荷", False)
-    # data_editorで数量と納品予定日を編集可能にする
+    # 修正：column_orderで順番を制御し、column_configでidを内部保持しつつ隠す
     edited_ordered = st.data_editor(
-        ordered_df[["入荷", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date"]],
+        ordered_df,
         hide_index=True, use_container_width=True,
-        disabled=["id", "category", "item_name", "product_name", "vendor", "order_date"],
+        column_order=["入荷", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "order_date"],
+        column_config={"id": None, "status": None, "request_date": None}, # IDを隠す
+        disabled=["category", "item_name", "product_name", "vendor", "order_date"],
         key="ordered_editor"
     )
     
-    if st.button("✅ チェックした項目の納品を確認（完了へ）", type="primary"):
-        # 編集された内容（数量・納品日）を反映しつつ、ステータスを完了にする
+    if st.button("✅ チェックした項目の納品を確認（完了へ）", type="primary", use_container_width=True):
         for i, row in edited_ordered.iterrows():
-            orig_id = row["id"]
+            orig_id = row["id"] # これで裏側のidを安全に取得できる！
             idx = df_orders[df_orders["id"] == orig_id].index[0]
-            # 常に最新の編集値を反映
             df_orders.at[idx, "quantity"] = row["quantity"]
             df_orders.at[idx, "delivery_date"] = str(row["delivery_date"])
-            # チェックが入っていれば完了
             if row["入荷"]:
                 df_orders.at[idx, "status"] = "完了"
         
         update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Delivery Confirmed")
-        st.toast("納品処理が完了しました！")
+        st.toast("納品処理を確定しました！")
         st.rerun()
 else:
     st.write("現在、入荷待ちの資材はありません。")
 
 st.divider()
 
-# 4. 【エリア3】履歴（完了分）
-st.subheader("📑 完了履歴（直近30件）")
+# 4. 【エリア3】完了履歴
+st.subheader("📑 3. 完了履歴（直近30件）")
 done_df = df_orders[df_orders['status'] == '完了'].sort_values("delivery_date", ascending=False)
 st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
