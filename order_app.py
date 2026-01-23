@@ -181,7 +181,7 @@ with st.expander(f"🚚 発注済み・入荷待ち ({len(ordered_df)}件)", exp
         st.write("現在、入荷待ちの資材はありません。")
 
 done_df = df_orders[df_orders['status'] == '完了'].sort_values("delivery_date", ascending=False)
-with st.expander(f"📑 完了履歴 (直近{len(done_df.head(30))}件)", expanded=False):
+with st.expander(f"🫡 完了履歴 (直近{len(done_df.head(30))}件)", expanded=False):
     if not done_df.empty:
         st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
     else:
