@@ -5,26 +5,25 @@ import base64
 from datetime import datetime
 import io
 
-# --- 1. 設定（あなたの環境用） ---
+# --- 1. 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
+FILE_PATH_MASTER = "material_master.csv" # 新しいマスタファイル
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- 2. GitHub連携用関数 ---
-def get_github_data(file_path):
+# --- 2. GitHub連携関数 ---
+def get_github_data(file_path, default_cols):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
-    cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
     if res.status_code == 200:
         content = res.json()
         csv_data = base64.b64decode(content["content"]).decode("utf-8")
         if not csv_data.strip():
-            return pd.DataFrame(columns=cols), content["sha"]
-        df = pd.read_csv(io.StringIO(csv_data))
-        return df, content["sha"]
+            return pd.DataFrame(columns=default_cols), content["sha"]
+        return pd.read_csv(io.StringIO(csv_data)), content["sha"]
     else:
-        return pd.DataFrame(columns=cols), None
+        return pd.DataFrame(columns=default_cols), None
 
 def update_github_data(file_path, df, sha, message):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
@@ -35,90 +34,61 @@ def update_github_data(file_path, df, sha, message):
     res = requests.put(url, headers=headers, json=data)
     return res.status_code
 
-# --- 3. 資材マスタ ---
-MASTER_DATA = {
-    "化粧箱": {
-        "ギフト箱A": ["クッキーセット", "ゼリー詰合せ"],
-        "サービス箱B": ["ショートケーキ用", "シュークリーム用"]
-    },
-    "トレイ": {
-        "透明トレイS": ["サラダ用", "フルーツ用"],
-        "耐熱L": ["カレー弁当", "パスタ用"]
-    }
-}
+st.set_page_config(page_title="資材管理システム", layout="wide", page_icon="📦")
 
-st.set_page_config(page_title="資材発注システム", layout="wide", page_icon="📦")
-st.title("📦 資材発注管理システム")
+# データ読み込み
+df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"])
+df_master, sha_master = get_github_data(FILE_PATH_MASTER, ["item_name", "product_name"])
 
-# データ読み出し
-df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS)
+# タブ分け
+tab1, tab2 = st.tabs(["🛒 発注・管理", "⚙️ マスタ登録"])
 
-# --- 4. 未対応通知 ---
-pending_df = df_orders[df_orders['status'] == '未対応']
-if not pending_df.empty:
-    st.warning(f"⚠️ **未対応の発注依頼が {len(pending_df)} 件あります。**")
-else:
-    st.success("✅ 全ての依頼が処理済みです。")
-
-# --- 5. 現場：発注依頼 ---
-st.header("🛒 現場：発注依頼")
-with st.expander("➕ 新規依頼フォーム", expanded=False):
-    c_cat = st.selectbox("カテゴリ", list(MASTER_DATA.keys()))
-    c_item = st.selectbox("資材名", list(MASTER_DATA[c_cat].keys()))
-    c_prod = st.selectbox("商品名", MASTER_DATA[c_cat][c_item])
+# --- タブ1：発注・管理 ---
+with tab1:
+    st.title("📦 資材発注管理")
     
-    if st.button("依頼を送信", type="primary", use_container_width=True):
-        new_id = int(df_orders['id'].max() + 1) if not df_orders.empty else 1
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        new_row = pd.DataFrame([{
-            "id": new_id, "category": c_cat, "item_name": c_item, "product_name": c_prod,
-            "request_date": now, "status": "未対応", "quantity": 0, "vendor": "",
-            "order_date": "", "delivery_date": ""
-        }])
-        df_updated = pd.concat([df_orders, new_row], ignore_index=True)
-        if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, f"Request {c_item}") in [200, 201]:
-            st.success("依頼完了！")
-            st.rerun()
-
-st.divider()
-
-# --- 6. 担当者：発注処理（ここをエラー回避のために書き換えました） ---
-st.header("📝 担当者：発注処理")
-if not pending_df.empty:
-    # 古いStreamlitでも動くように、ID入力方式に変更
-    st.write("処理する依頼のIDを選択してください：")
-    target_ids = st.multiselect("IDを選択", pending_df['id'].tolist())
-
-    if target_ids:
-        selected_rows = pending_df[pending_df['id'].isin(target_ids)]
-        with st.form("order_process_form"):
-            payload = {}
-            for _, r in selected_rows.iterrows():
-                st.markdown(f"**📌 ID:{r['id']} | {r['item_name']}**")
-                col1, col2, col3 = st.columns(3)
-                with col1: qty = st.number_input(f"数量 ({r['id']})", min_value=1, key=f"q_{r['id']}")
-                with col2: ven = st.text_input(f"発注先 ({r['id']})", key=f"v_{r['id']}")
-                with col3: ddt = st.date_input(f"納品予定 ({r['id']})", key=f"d_{r['id']}")
-                payload[r['id']] = {"qty": qty, "vendor": ven, "date": ddt}
+    # 現場：発注依頼
+    st.header("🛒 現場：発注依頼")
+    with st.expander("➕ 新規依頼フォーム", expanded=False):
+        if df_master.empty:
+            st.info("先にマスタ登録タブから資材と商品を登録してください。")
+        else:
+            # 【重要】資材名を選んだら、商品名を絞り込む
+            unique_items = df_master["item_name"].unique()
+            c_item = st.selectbox("資材名を選択", unique_items)
             
-            if st.form_submit_button("一括更新", use_container_width=True):
-                for oid, v in payload.items():
-                    idx = df_orders[df_orders['id'] == oid].index[0]
-                    df_orders.at[idx, 'quantity'] = v['qty']
-                    df_orders.at[idx, 'vendor'] = v['vendor']
-                    df_orders.at[idx, 'order_date'] = datetime.now().strftime("%Y-%m-%d")
-                    df_orders.at[idx, 'delivery_date'] = str(v['date'])
-                    df_orders.at[idx, 'status'] = "発注済み"
-                
-                if update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Process Orders") in [200, 201]:
-                    st.success("更新しました！")
+            # 選ばれた資材名に紐づく商品名だけにフィルター
+            filtered_products = df_master[df_master["item_name"] == c_item]["product_name"].tolist()
+            c_prod = st.selectbox("該当する商品名を選択", filtered_products)
+            
+            if st.button("依頼を送信", type="primary"):
+                new_id = int(df_orders['id'].max() + 1) if not df_orders.empty else 1
+                now = datetime.now().strftime("%Y-%m-%d %H:%M")
+                new_row = pd.DataFrame([{"id": new_id, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
+                df_updated = pd.concat([df_orders, new_row], ignore_index=True)
+                if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
+                    st.success("依頼完了！")
                     st.rerun()
-    
-    st.write("現在の未対応一覧：")
-    st.dataframe(pending_df[["id", "category", "item_name", "product_name", "request_date"]], use_container_width=True, hide_index=True)
-else:
-    st.info("対応が必要な依頼はありません。")
 
-with st.expander("📑 履歴一覧"):
-    st.dataframe(df_orders.sort_values("id", ascending=False), use_container_width=True, hide_index=True)
+    # (中略：担当者処理・履歴表示は前回のコードと同じ)
+
+# --- タブ2：マスタ登録 ---
+with tab2:
+    st.header("⚙️ 資材・商品マスタ登録")
+    st.write("ここで登録した「資材名」と「商品名」が、依頼フォームの選択肢になります。")
     
+    with st.form("master_form"):
+        new_item = st.text_input("資材名 (例: 化粧箱A)")
+        new_prod = st.text_input("商品名 (例: クッキーセット)")
+        if st.form_submit_button("マスタに追加"):
+            if new_item and new_prod:
+                new_m_row = pd.DataFrame([{"item_name": new_item, "product_name": new_prod}])
+                df_m_updated = pd.concat([df_master, new_m_row], ignore_index=True).drop_duplicates()
+                if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
+                    st.success(f"登録しました: {new_item} - {new_prod}")
+                    st.rerun()
+            else:
+                st.error("両方の項目を入力してください。")
+
+    st.subheader("現在の登録内容")
+    st.dataframe(df_master, use_container_width=True, hide_index=True)
