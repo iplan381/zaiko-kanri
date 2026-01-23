@@ -45,9 +45,22 @@ master_cols = ["category", "item_name", "product_name"]
 df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, order_cols)
 df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
 
-# --- 👈 サイドバー：新規発注依頼 ---
+# 未対応件数の計算
+pending_df = df_orders[df_orders['status'] == '未対応'].copy()
+count = len(pending_df)
+
+# --- 👈 サイドバー：新規発注依頼 ＆ ステータス ---
 with st.sidebar:
     st.title("➕ 新規発注依頼")
+    
+    # サイドバーにもバッジ風の表示を追加
+    if count > 0:
+        st.error(f"現在の未対応：{count}件") # ここはあえて赤で短く
+    else:
+        st.success("未対応なし")
+
+    st.divider()
+    
     if df_master.dropna(how='all').empty:
         st.warning("先にマスタ登録が必要です。")
     else:
@@ -83,22 +96,20 @@ with st.sidebar:
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
 
-# 1. 未処理件数の控えめな表示
-pending_df = df_orders[df_orders['status'] == '未対応'].copy()
-count = len(pending_df)
-
+# 1. ちょうどいい塩梅の通知（HTMLで少しカスタム）
 if count > 0:
-    # 派手な赤背景をやめて、メトリック（指標）と標準の警告ボックスに変更
-    col_stat, _ = st.columns([1, 2])
-    with col_stat:
-        st.metric(label="未対応の依頼数", value=f"{count} 件", delta_color="inverse")
-    
-    st.warning(f"現在、{count}件の未処理依頼があります。下のリストから対応をお願いします。")
+    st.markdown(f"""
+        <div style="border-left: 10px solid #ff4b4b; background-color: #fff2f2; padding: 15px; border-radius: 5px;">
+            <span style="color: #ff4b4b; font-weight: bold; font-size: 20px;">📢 未対応の依頼が {count} 件あります</span><br>
+            <small style="color: #666;">チェックボックスを選択して、数量と発注先を入力してください。</small>
+        </div>
+    """, unsafe_allow_html=True)
+    st.write("") # スペース空け
 else:
-    st.success("✅ すべての依頼が処理済みです。")
+    st.success("✅ 全ての依頼が完了しています。お疲れ様です！")
 
 # 2. 発注処理エリア
-st.subheader("📝 発注処理")
+st.subheader("📝 発注処理待ち")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
     show_cols = ["選択", "category", "item_name", "product_name", "request_date"]
@@ -131,15 +142,15 @@ if not pending_df.empty:
                     df_orders.at[idx, 'delivery_date'], df_orders.at[idx, 'status'] = str(v['date']), "発注済み"
                 
                 if update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Process") in [200, 201]:
-                    st.toast("更新が完了しました！")
+                    st.toast("GitHubへ送信完了しました！")
                     st.rerun()
 else:
     st.info("現在、処理待ちのデータはありません。")
 
 st.markdown("---")
 
-# 3. 履歴エリア（処理の下に配置）
-st.subheader("📑 発注履歴（最近の30件）")
+# 3. 履歴エリア
+st.subheader("📑 直近の発注履歴")
 history_cols = ["status", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]
 if not df_orders.empty:
     history_df = df_orders[history_cols].sort_values(by=["status", "request_date"], ascending=[False, False])
