@@ -5,37 +5,39 @@ import base64
 from datetime import datetime
 import io
 
-# --- 1. 設定（あなたの環境用） ---
+# --- 1. 設定（あなたのGitHub環境） ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- 2. GitHub連携用関数（エラー回避版） ---
+# --- 2. GitHub連携用関数（ここを修正しました） ---
 def get_github_data(file_path):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
     
-    # デフォルトのカラム（これがないと後でエラーになる）
     cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
     
     if res.status_code == 200:
         content = res.json()
         csv_data = base64.b64decode(content["content"]).decode("utf-8")
-        # もしファイルの中身が空だった場合
         if not csv_data.strip():
             return pd.DataFrame(columns=cols), content["sha"]
-        
         df = pd.read_csv(io.StringIO(csv_data))
         return df, content["sha"]
     else:
-        # ファイルがまだGitHubにない場合など
         return pd.DataFrame(columns=cols), None
 
-# データの読み込み（ここが36行目あたりのエラー箇所）
-df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS)
+def update_github_data(file_path, df, sha, message):
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    csv_content = df.to_csv(index=False)
+    content_base64 = base64.b64encode(csv_content.encode("utf-8")).decode("utf-8")
+    data = {"message": message, "content": content_base64, "sha": sha}
+    res = requests.put(url, headers=headers, json=data)
+    return res.status_code
 
-# --- 3. 資材マスタ（現場に合わせて適宜変更） ---
+# --- 3. 資材マスタ ---
 MASTER_DATA = {
     "化粧箱": {
         "ギフト箱A": ["クッキーセット", "ゼリー詰合せ"],
@@ -60,7 +62,7 @@ if not pending_df.empty:
 else:
     st.success("✅ 全ての依頼が処理済みです。")
 
-# --- 5. 現場：発注依頼（入力） ---
+# --- 5. 現場：発注依頼 ---
 st.header("🛒 現場：発注依頼")
 with st.expander("➕ 新規依頼フォーム", expanded=False):
     c_cat = st.selectbox("カテゴリ", list(MASTER_DATA.keys()))
@@ -76,13 +78,14 @@ with st.expander("➕ 新規依頼フォーム", expanded=False):
             "order_date": "", "delivery_date": ""
         }])
         df_updated = pd.concat([df_orders, new_row], ignore_index=True)
+        # ここで呼び出している関数を上に定義しました
         if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, f"Request {c_item}") in [200, 201]:
             st.success("依頼完了！")
             st.rerun()
 
 st.divider()
 
-# --- 6. 担当者：発注処理（更新） ---
+# --- 6. 担当者：発注処理 ---
 st.header("📝 担当者：発注処理")
 if not pending_df.empty:
     st.write("処理する依頼を選択：")
@@ -116,6 +119,5 @@ if not pending_df.empty:
 else:
     st.info("対応が必要な依頼はありません。")
 
-# --- 7. 履歴表示 ---
 with st.expander("📑 履歴一覧"):
     st.dataframe(df_orders.sort_values("id", ascending=False), use_container_width=True, hide_index=True)
