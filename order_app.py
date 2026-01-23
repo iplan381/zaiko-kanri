@@ -100,7 +100,6 @@ if count > 0:
     st.markdown(f"""
         <div style="border-left: 10px solid #ff4b4b; background-color: #fff2f2; padding: 15px; border-radius: 5px;">
             <span style="color: #ff4b4b; font-weight: bold; font-size: 20px;">📢 未対応の依頼が {count} 件あります</span><br>
-            <small style="color: #666;">内容を確認して発注処理を行ってください。</small>
         </div>
     """, unsafe_allow_html=True)
     st.write("") 
