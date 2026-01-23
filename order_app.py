@@ -5,17 +5,35 @@ import base64
 from datetime import datetime
 import io
 
-# --- 1. 設定：GitHubの情報を入力 ---
-REPO_NAME = "iplan381/zaiko-kanri"  # REPOSITORY ではなく REPO_NAME にする
+# --- 1. 設定（あなたの環境用） ---
+REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- 2. GitHub連携用関数（ここも REPO_NAME を使うように修正） ---
+# --- 2. GitHub連携用関数（エラー回避版） ---
 def get_github_data(file_path):
-    # url の中の {REPOSITORY} を {REPO_NAME} に書き換える
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
+    
+    # デフォルトのカラム（これがないと後でエラーになる）
+    cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
+    
+    if res.status_code == 200:
+        content = res.json()
+        csv_data = base64.b64decode(content["content"]).decode("utf-8")
+        # もしファイルの中身が空だった場合
+        if not csv_data.strip():
+            return pd.DataFrame(columns=cols), content["sha"]
+        
+        df = pd.read_csv(io.StringIO(csv_data))
+        return df, content["sha"]
+    else:
+        # ファイルがまだGitHubにない場合など
+        return pd.DataFrame(columns=cols), None
+
+# データの読み込み（ここが36行目あたりのエラー箇所）
+df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS)
 
 # --- 3. 資材マスタ（現場に合わせて適宜変更） ---
 MASTER_DATA = {
