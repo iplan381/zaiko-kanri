@@ -105,11 +105,11 @@ st.title("📦 資材管理メインボード")
 if count > 0:
     st.markdown(f"""
         <div style="background-color: #ff4b4b; color: white; padding: 12px 25px; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: left; margin-bottom: 25px;">
-            📢 未対応の依頼が {count} 件あります
+            ⚠️ 未対応の依頼が {count} 件あります
         </div>
     """, unsafe_allow_html=True)
 
-st.subheader("📝 1. 発注処理待ち")
+st.subheader("📝 発注処理待ち")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
     edited_p = st.data_editor(
@@ -156,7 +156,7 @@ else:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-with st.expander(f"🚚 2. 発注済み・入荷待ち ({len(ordered_df)}件)", expanded=False):
+with st.expander(f"🚚 発注済み・入荷待ち ({len(ordered_df)}件)", expanded=False):
     if not ordered_df.empty:
         ordered_df.insert(0, "入荷", False)
         edited_ordered = st.data_editor(
@@ -181,7 +181,7 @@ with st.expander(f"🚚 2. 発注済み・入荷待ち ({len(ordered_df)}件)", 
         st.write("現在、入荷待ちの資材はありません。")
 
 done_df = df_orders[df_orders['status'] == '完了'].sort_values("delivery_date", ascending=False)
-with st.expander(f"📑 3. 完了履歴 (直近{len(done_df.head(30))}件)", expanded=False):
+with st.expander(f"📑 完了履歴 (直近{len(done_df.head(30))}件)", expanded=False):
     if not done_df.empty:
         st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
     else:
