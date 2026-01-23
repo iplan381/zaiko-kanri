@@ -98,8 +98,18 @@ st.title("📦 資材管理メインボード")
 # 1. 未対応通知
 if count > 0:
     st.markdown(f"""
-        <div style="border-left: 10px solid #ff4b4b; background-color: #fff2f2; padding: 15px; border-radius: 5px;">
-            <span style="color: #ff4b4b; font-weight: bold; font-size: 20px;">📢 未対応の依頼が {count} 件あります</span><br>
+        <div style="
+            background-color: #ff4b4b; 
+            color: white; 
+            padding: 12px 20px; 
+            border-radius: 8px; 
+            font-size: 20px; 
+            font-weight: bold; 
+            text-align: center;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+            📢 未対応の依頼が {count} 件あります
         </div>
     """, unsafe_allow_html=True)
     st.write("") 
