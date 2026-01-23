@@ -90,7 +90,7 @@ with st.sidebar:
                         st.toast(f"✅ 「{m_item}」をマスタに登録しました！", icon="⚙️")
                         st.rerun()
                 else:
-                    st.error("資材名と商品名は入力必須だぜ！")
+                    st.error("資材名と商品名は入力必須")
 
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
@@ -105,7 +105,6 @@ if count > 0:
             border-radius: 8px; 
             font-size: 20px; 
             font-weight: bold; 
-            text-align: center;
             margin-bottom: 25px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         ">
