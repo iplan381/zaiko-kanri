@@ -49,10 +49,9 @@ df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
 pending_df = df_orders[df_orders['status'] == '未対応'].copy()
 count = len(pending_df)
 
-# --- 👈 サイドバー：新規発注依頼（ここをスッキリさせた！） ---
+# --- 👈 サイドバー ---
 with st.sidebar:
     st.title("➕ 新規発注依頼")
-    
     st.divider()
     
     if df_master.dropna(how='all').empty:
@@ -71,26 +70,32 @@ with st.sidebar:
             new_row = pd.DataFrame([{"id": new_id, "category": c_cat, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
             df_updated = pd.concat([df_orders, new_row], ignore_index=True)
             if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
-                st.success("依頼完了！")
+                st.toast("✅ 依頼を送信しました！", icon="📨")
                 st.rerun()
     
     st.divider()
+    # --- マスタ登録セクション ---
     with st.expander("⚙️ マスタ登録"):
-        with st.form("master_form"):
+        with st.form("master_form", clear_on_submit=True): # clear_on_submitをTrueに！
             m_cat = st.selectbox("カテゴリ", ["化粧箱", "トレイ", "ダンボール", "その他"])
             m_item = st.text_input("資材名")
             m_prod = st.text_input("商品名")
+            
             if st.form_submit_button("マスタに追加", use_container_width=True):
                 if m_item and m_prod:
                     new_m_row = pd.DataFrame([{"category": m_cat, "item_name": m_item, "product_name": m_prod}])
                     df_m_updated = pd.concat([df_master, new_m_row], ignore_index=True).drop_duplicates()
-                    update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master")
-                    st.rerun()
+                    if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
+                        # ここでポップアップを表示！
+                        st.toast(f"✅ 「{m_item}」をマスタに登録しました！", icon="⚙️")
+                        st.rerun()
+                else:
+                    st.error("資材名と商品名は入力必須だぜ！")
 
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
 
-# 1. ちょうどいい塩梅の通知
+# 1. 未対応通知
 if count > 0:
     st.markdown(f"""
         <div style="border-left: 10px solid #ff4b4b; background-color: #fff2f2; padding: 15px; border-radius: 5px;">
@@ -136,7 +141,7 @@ if not pending_df.empty:
                     df_orders.at[idx, 'delivery_date'], df_orders.at[idx, 'status'] = str(v['date']), "発注済み"
                 
                 if update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Process") in [200, 201]:
-                    st.toast("GitHubへ送信完了しました！")
+                    st.toast("🚀 GitHubへ送信完了しました！")
                     st.rerun()
 else:
     st.info("現在、処理待ちのデータはありません。")
