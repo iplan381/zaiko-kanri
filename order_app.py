@@ -47,8 +47,41 @@ df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
 
 tab1, tab2, tab3 = st.tabs(["🛒 発注・管理", "⚙️ マスタ登録", "📑 履歴確認"])
 
+# --- タブ1：発注・管理 ---
+with tab1:
+    st.title("📦 資材発注管理")
+    
+    st.header("🛒 現場：発注依頼")
+    with st.expander("➕ 新規依頼フォーム", expanded=True):
+        if df_master.dropna(how='all').empty:
+            st.warning("先に「マスタ登録」をお願いします。")
+        else:
+            col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 0.5])
+            with col_a:
+                cats = [c for c in df_master["category"].unique() if pd.notna(c) and c != ""]
+                c_cat = st.selectbox("カテゴリ", cats)
+            with col_b:
+                items = df_master[df_master["category"] == c_cat]["item_name"].unique()
+                c_item = st.selectbox("資材名", items)
+            with col_c:
+                prods = df_master[(df_master["category"] == c_cat) & (df_master["item_name"] == c_item)]["product_name"].unique()
+                c_prod = st.selectbox("商品名", prods)
+            with col_d:
+                st.write(" ")
+                send_btn = st.button("送信", type="primary", use_container_width=True)
 
- # --- 担当者：発注処理（IDを隠した！） ---
+            if send_btn:
+                new_id = int(df_orders['id'].max() + 1) if not df_orders.empty else 1
+                now = datetime.now().strftime("%Y-%m-%d %X")[:16] # 秒を削って短く
+                new_row = pd.DataFrame([{"id": new_id, "category": c_cat, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
+                df_updated = pd.concat([df_orders, new_row], ignore_index=True)
+                if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
+                    st.success("依頼完了！")
+                    st.rerun()
+
+    st.divider()
+
+    # --- 担当者：発注処理（IDを隠した！） ---
     st.header("📝 担当者：発注処理")
     pending_df = df_orders[df_orders['status'] == '未対応'].copy()
     
@@ -94,40 +127,6 @@ tab1, tab2, tab3 = st.tabs(["🛒 発注・管理", "⚙️ マスタ登録", "�
                         st.rerun()
     else:
         st.info("現在、未対応の依頼はありません。")
-
-# --- タブ1：発注・管理 ---
-with tab1:
-    st.title("📦 資材発注管理")
-    
-    st.header("🛒 現場：発注依頼")
-    with st.expander("➕ 新規依頼フォーム", expanded=True):
-        if df_master.dropna(how='all').empty:
-            st.warning("先に「マスタ登録」をお願いします。")
-        else:
-            col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 0.5])
-            with col_a:
-                cats = [c for c in df_master["category"].unique() if pd.notna(c) and c != ""]
-                c_cat = st.selectbox("カテゴリ", cats)
-            with col_b:
-                items = df_master[df_master["category"] == c_cat]["item_name"].unique()
-                c_item = st.selectbox("資材名", items)
-            with col_c:
-                prods = df_master[(df_master["category"] == c_cat) & (df_master["item_name"] == c_item)]["product_name"].unique()
-                c_prod = st.selectbox("商品名", prods)
-            with col_d:
-                st.write(" ")
-                send_btn = st.button("送信", type="primary", use_container_width=True)
-
-            if send_btn:
-                new_id = int(df_orders['id'].max() + 1) if not df_orders.empty else 1
-                now = datetime.now().strftime("%Y-%m-%d %X")[:16] # 秒を削って短く
-                new_row = pd.DataFrame([{"id": new_id, "category": c_cat, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
-                df_updated = pd.concat([df_orders, new_row], ignore_index=True)
-                if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
-                    st.success("依頼完了！")
-                    st.rerun()
-
-    st.divider()
 
 # --- タブ2：マスタ登録 ---
 with tab2:
