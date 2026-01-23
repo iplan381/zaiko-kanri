@@ -11,7 +11,7 @@ REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_LOG = "stock_log_main.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-st.set_page_config(page_title="出庫分析システム", layout="wide")
+st.set_page_config(page_title="出庫分析", layout="wide")
 
 @st.cache_data(ttl=60)
 def get_github_data(file_path):
@@ -26,7 +26,7 @@ def get_github_data(file_path):
 
 df_log_raw = get_github_data(FILE_PATH_LOG)
 
-st.title("📈 階層別 在庫動態分析")
+st.title("📈 在庫動態分析")
 
 if not df_log_raw.empty:
     # --- データ前処理 ---
@@ -42,7 +42,7 @@ if not df_log_raw.empty:
 
     # --- 🔍 絞り込み条件（サイドバー） ---
     with st.sidebar:
-        st.markdown("### 🚀 クイック移動")
+        st.markdown("### 🔗 クイック移動")
         c1, c2 = st.columns(2)
         c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
