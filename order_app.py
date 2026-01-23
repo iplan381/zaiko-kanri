@@ -75,7 +75,7 @@ with st.sidebar:
                 st.rerun()
     
     st.divider()
-    with st.expander("⚙️ マスタ登録・編集"):
+    with st.expander("⚙️ マスタ登録"):
         with st.form("master_form"):
             m_cat = st.selectbox("カテゴリ", ["化粧箱", "トレイ", "ダンボール", "その他"])
             m_item = st.text_input("資材名")
