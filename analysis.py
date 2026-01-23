@@ -41,6 +41,13 @@ if not df_log_raw.empty:
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
     # --- 🔍 絞り込み条件（サイドバー） ---
+with st.sidebar:
+    st.title("🔗 クイック移動")
+    col1, col2 = st.columns(2)
+    col1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/") 
+    col2.link_button("🚚 発注画面", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app//") 
+    st.divider()
+    
     st.sidebar.header("🔍 絞り込み条件")
     
     # 【修正ポイント①】商品名・サイズ・地名の選択肢を、期間に関係なく全データから先に作っておく
