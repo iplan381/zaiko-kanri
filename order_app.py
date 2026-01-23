@@ -127,9 +127,9 @@ if not ordered_df.empty:
     ordered_df.insert(0, "入荷", False)
     # data_editorで数量と納品予定日を編集可能にする
     edited_ordered = st.data_editor(
-        ordered_df[["入荷", "id", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "order_date"]],
+        ordered_df[["入荷", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "order_date"]],
         hide_index=True, use_container_width=True,
-        disabled=["category", "item_name", "product_name", "vendor", "order_date"],
+        disabled=["id", "category", "item_name", "product_name", "vendor", "order_date"],
         key="ordered_editor"
     )
     
