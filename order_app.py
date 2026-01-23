@@ -128,17 +128,26 @@ if not pending_df.empty:
         with st.form("process_form"):
             payload = {}
             vendor_list = df_vendor["vendor_name"].tolist() if not df_vendor.empty else []
-            for sid in selected_ids:
+           for sid in selected_ids:
                 row = pending_df[pending_df["id"] == sid].iloc[0]
                 st.markdown(f"**📍 {row['item_name']} ({row['product_name']})**")
                 c1, c2, c3 = st.columns(3)
+                
+                # ここで1つずつ情報を入力してもらう
+                qty_input = c1.number_input("数量", min_value=1, key=f"q_{sid}")
+                
+                if vendor_list:
+                    vendor_input = c2.selectbox("発注先", vendor_list, key=f"v_{sid}")
+                else:
+                    vendor_input = c2.text_input("発注先（マスタ未登録）", key=f"v_{sid}")
+                
+                date_input = c3.date_input("納品予定", key=f"d_{sid}")
+                
+                # ここで「注文セット」としてまとめる
                 payload[sid] = {
-                    "qty": c1.number_input("数量", min_value=1, key=f"q_{sid}"), 
-                   if vendor_list:
-                    vendor = c2.selectbox("発注先", vendor_list, key=f"v_{sid}")
-                   else:
-                    vendor = c2.text_input("発注先（マスタ未登録）", key=f"v_{sid}")
-                    "date": c3.date_input("納品予定", key=f"d_{sid}")
+                    "qty": qty_input, 
+                    "vendor": vendor_input, 
+                    "date": date_input
                 }
             if st.form_submit_button("✅ チェックした項目を発注済みにする", use_container_width=True):
                 for oid, v in payload.items():
