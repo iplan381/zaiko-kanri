@@ -38,7 +38,7 @@ def update_github_data(file_path, df, sha, message):
     res = requests.put(url, headers=headers, json=data)
     return res.status_code
 
-st.set_page_config(page_title="資材管理システム", layout="wide", page_icon="📦")
+st.set_page_config(page_title="発注管理", layout="wide", page_icon="📦")
 
 # データ読み込み
 order_cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
@@ -100,7 +100,7 @@ with st.sidebar:
                     st.rerun()
 
 # --- メイン画面 ---
-st.title("📦 資材管理メインボード")
+st.title("📦 資材発注管理")
 
 if count > 0:
     st.markdown(f"""
