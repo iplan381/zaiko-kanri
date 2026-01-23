@@ -96,7 +96,7 @@ if count > 0:
     """, unsafe_allow_html=True)
 
 # 2. 【エリア1】発注処理待ち
-st.subheader("📝 1. 発注処理待ち（現場からの依頼）")
+st.subheader("📝 発注処理待ち")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
     edited_p = st.data_editor(pending_df[["選択", "category", "item_name", "product_name", "request_date"]], hide_index=True, use_container_width=True, key="pending_editor")
@@ -121,7 +121,7 @@ else:
 st.divider()
 
 # 3. 【エリア2】発注済み（入荷待ち・編集可能）
-st.subheader("🚚 2. 発注済み（入荷待ち）")
+st.subheader("🚚 発注済み")
 if not ordered_df.empty:
     st.caption("※数量や納品予定日はここで直接編集して保存できます。入荷したらチェックを入れて確定してください。")
     ordered_df.insert(0, "入荷", False)
@@ -129,7 +129,7 @@ if not ordered_df.empty:
     edited_ordered = st.data_editor(
         ordered_df[["入荷", "id", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "order_date"]],
         hide_index=True, use_container_width=True,
-        disabled=["id", "category", "item_name", "product_name", "vendor", "order_date"],
+        disabled=["category", "item_name", "product_name", "vendor", "order_date"],
         key="ordered_editor"
     )
     
