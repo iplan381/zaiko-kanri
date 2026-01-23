@@ -48,27 +48,6 @@ df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, order_cols)
 df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
 df_vendor, sha_vendor = get_github_data(FILE_PATH_VENDOR, vendor_cols)
 
-# --- ここから「切り替えスイッチ」を足す ---
-st.sidebar.title("🎮 画面切り替え")
-page = st.sidebar.radio("どれを見る？", ["📝 発注・入荷管理", "📦 在庫状況", "📊 発注分析"])
-st.sidebar.divider()
-
-# --- 「発注」が選ばれているときだけ、今のメイン画面を出す ---
-if page == "📝 発注・入荷管理":
-    st.title("📦 資材管理メインボード")
-    # ここに今の「未対応通知」から「履歴」までのコードを全部入れる（※右にズラして！）
-
-# --- 「在庫」が選ばれたときは、これだけ出す ---
-elif page == "📦 在庫状況":
-    st.title("📦 在庫状況（確認用）")
-    st.info("CSVを直接いじった結果がここに反映されるぜ！")
-    st.dataframe(df_master, use_container_width=True) # とりあえずマスタを表示
-
-# --- 「分析」が選ばれたときは、グラフを出す ---
-elif page == "📊 発注分析":
-    st.title("📊 発注データ分析")
-    st.line_chart(df_orders.groupby("order_date")["quantity"].sum())
-
 # 各ステータスのデータ抽出
 pending_df = df_orders[df_orders['status'] == '未対応'].copy()
 ordered_df = df_orders[df_orders['status'] == '発注済み'].copy()
