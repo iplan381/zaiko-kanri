@@ -104,8 +104,6 @@ if count > 0:
         </div>
     """, unsafe_allow_html=True)
     st.write("") 
-else:
-    st.success("✅ 全ての依頼が完了しています。")
 
 # 2. 発注処理エリア
 st.subheader("📝 発注処理待ち")
