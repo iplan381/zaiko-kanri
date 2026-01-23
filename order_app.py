@@ -45,20 +45,15 @@ master_cols = ["category", "item_name", "product_name"]
 df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, order_cols)
 df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
 
-# 未対応件数の計算
+# 未対応件数の計算（メイン画面用）
 pending_df = df_orders[df_orders['status'] == '未対応'].copy()
 count = len(pending_df)
 
-# --- 👈 サイドバー：新規発注依頼 ＆ ステータス ---
+# --- 👈 サイドバー：新規発注依頼（ここをスッキリさせた！） ---
 with st.sidebar:
     st.title("➕ 新規発注依頼")
+    st.write("資材が必要な場合は、以下を選択して送信してください。")
     
-    # サイドバーにもバッジ風の表示を追加
-    if count > 0:
-        st.error(f"現在の未対応：{count}件") # ここはあえて赤で短く
-    else:
-        st.success("未対応なし")
-
     st.divider()
     
     if df_master.dropna(how='all').empty:
@@ -96,17 +91,17 @@ with st.sidebar:
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
 
-# 1. ちょうどいい塩梅の通知（HTMLで少しカスタム）
+# 1. ちょうどいい塩梅の通知
 if count > 0:
     st.markdown(f"""
         <div style="border-left: 10px solid #ff4b4b; background-color: #fff2f2; padding: 15px; border-radius: 5px;">
             <span style="color: #ff4b4b; font-weight: bold; font-size: 20px;">📢 未対応の依頼が {count} 件あります</span><br>
-            <small style="color: #666;">チェックボックスを選択して、数量と発注先を入力してください。</small>
+            <small style="color: #666;">内容を確認して発注処理を行ってください。</small>
         </div>
     """, unsafe_allow_html=True)
-    st.write("") # スペース空け
+    st.write("") 
 else:
-    st.success("✅ 全ての依頼が完了しています。お疲れ様です！")
+    st.success("✅ 全ての依頼が完了しています。")
 
 # 2. 発注処理エリア
 st.subheader("📝 発注処理待ち")
