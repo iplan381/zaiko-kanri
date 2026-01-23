@@ -6,10 +6,9 @@ from datetime import datetime
 import io
 
 # --- 1. 設定：GitHubの情報を入力 ---
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-# 自分の環境に合わせて書き換えて！
-REPOSITORY = "YOUR_USER_NAME/zaiko-kanri" 
+REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 # --- 2. GitHub連携関数 ---
 def get_github_data(file_path):
