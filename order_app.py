@@ -5,19 +5,17 @@ import base64
 from datetime import datetime
 import io
 
-# --- 1. 設定（あなたのGitHub環境） ---
+# --- 1. 設定（あなたの環境用） ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- 2. GitHub連携用関数（ここを修正しました） ---
+# --- 2. GitHub連携用関数 ---
 def get_github_data(file_path):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
-    
     cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
-    
     if res.status_code == 200:
         content = res.json()
         csv_data = base64.b64decode(content["content"]).decode("utf-8")
@@ -52,7 +50,7 @@ MASTER_DATA = {
 st.set_page_config(page_title="資材発注システム", layout="wide", page_icon="📦")
 st.title("📦 資材発注管理システム")
 
-# データ読み込み
+# データ読み出し
 df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS)
 
 # --- 4. 未対応通知 ---
@@ -78,46 +76,49 @@ with st.expander("➕ 新規依頼フォーム", expanded=False):
             "order_date": "", "delivery_date": ""
         }])
         df_updated = pd.concat([df_orders, new_row], ignore_index=True)
-        # ここで呼び出している関数を上に定義しました
         if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, f"Request {c_item}") in [200, 201]:
             st.success("依頼完了！")
             st.rerun()
 
 st.divider()
 
-# --- 6. 担当者：発注処理 ---
+# --- 6. 担当者：発注処理（ここをエラー回避のために書き換えました） ---
 st.header("📝 担当者：発注処理")
 if not pending_df.empty:
-    st.write("処理する依頼を選択：")
-    sel_event = st.dataframe(
-        pending_df[["id", "category", "item_name", "product_name", "request_date"]],
-        use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multiple_rows"
-    )
+    # 古いStreamlitでも動くように、ID入力方式に変更
+    st.write("処理する依頼のIDを選択してください：")
+    target_ids = st.multiselect("IDを選択", pending_df['id'].tolist())
 
-    if sel_event.selection.rows:
-        sel_data = pending_df.iloc[sel_event.selection.rows]
+    if target_ids:
+        selected_rows = pending_df[pending_df['id'].isin(target_ids)]
         with st.form("order_process_form"):
             payload = {}
-            for _, r in sel_data.iterrows():
-                st.markdown(f"**📌 {r['item_name']} ({r['product_name']})**")
+            for _, r in selected_rows.iterrows():
+                st.markdown(f"**📌 ID:{r['id']} | {r['item_name']}**")
                 col1, col2, col3 = st.columns(3)
-                with col1: qty = st.number_input("数量", min_value=1, key=f"q_{r['id']}")
-                with col2: ven = st.text_input("発注先", key=f"v_{r['id']}")
-                with col3: ddt = st.date_input("納品予定", key=f"d_{r['id']}")
+                with col1: qty = st.number_input(f"数量 ({r['id']})", min_value=1, key=f"q_{r['id']}")
+                with col2: ven = st.text_input(f"発注先 ({r['id']})", key=f"v_{r['id']}")
+                with col3: ddt = st.date_input(f"納品予定 ({r['id']})", key=f"d_{r['id']}")
                 payload[r['id']] = {"qty": qty, "vendor": ven, "date": ddt}
             
             if st.form_submit_button("一括更新", use_container_width=True):
                 for oid, v in payload.items():
                     idx = df_orders[df_orders['id'] == oid].index[0]
-                    df_orders.at[idx, 'quantity'], df_orders.at[idx, 'vendor'] = v['qty'], v['vendor']
+                    df_orders.at[idx, 'quantity'] = v['qty']
+                    df_orders.at[idx, 'vendor'] = v['vendor']
                     df_orders.at[idx, 'order_date'] = datetime.now().strftime("%Y-%m-%d")
-                    df_orders.at[idx, 'delivery_date'], df_orders.at[idx, 'status'] = str(v['date']), "発注済み"
+                    df_orders.at[idx, 'delivery_date'] = str(v['date'])
+                    df_orders.at[idx, 'status'] = "発注済み"
                 
                 if update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Process Orders") in [200, 201]:
                     st.success("更新しました！")
                     st.rerun()
+    
+    st.write("現在の未対応一覧：")
+    st.dataframe(pending_df[["id", "category", "item_name", "product_name", "request_date"]], use_container_width=True, hide_index=True)
 else:
     st.info("対応が必要な依頼はありません。")
 
 with st.expander("📑 履歴一覧"):
     st.dataframe(df_orders.sort_values("id", ascending=False), use_container_width=True, hide_index=True)
+    
