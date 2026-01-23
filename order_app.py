@@ -12,7 +12,6 @@ FILE_PATH_MASTER = "material_master.csv"
 FILE_PATH_VENDOR = "vendor_master.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-
 # --- 2. GitHub連携関数 ---
 def get_github_data(file_path, default_cols):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
@@ -89,20 +88,20 @@ with st.sidebar:
                     if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
                         st.toast(f"✅ 「{m_item}」を登録しました")
                         st.rerun()
+
     with st.expander("🏢 発注先マスタ登録"):
-    with st.form("vendor_form", clear_on_submit=True):
-        v_name = st.text_input("発注先名（仕入先）")
-        if st.form_submit_button("発注先を追加", use_container_width=True):
-            if v_name:
-                new_v_row = pd.DataFrame([{"vendor_name": v_name}])
-                df_v_updated = pd.concat([df_vendor, new_v_row], ignore_index=True).drop_duplicates()
-                update_github_data(FILE_PATH_VENDOR, df_v_updated, sha_vendor, "Update Vendor Master")
-                st.rerun()                   
+        with st.form("vendor_form", clear_on_submit=True):
+            v_name = st.text_input("発注先名（仕入先）")
+            if st.form_submit_button("発注先を追加", use_container_width=True):
+                if v_name:
+                    new_v_row = pd.DataFrame([{"vendor_name": v_name}])
+                    df_v_updated = pd.concat([df_vendor, new_v_row], ignore_index=True).drop_duplicates()
+                    update_github_data(FILE_PATH_VENDOR, df_v_updated, sha_vendor, "Update Vendor Master")
+                    st.rerun()
 
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
 
-# 1. 未対応通知（左詰め・赤地に白文字）
 if count > 0:
     st.markdown(f"""
         <div style="background-color: #ff4b4b; color: white; padding: 12px 25px; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: left; margin-bottom: 25px;">
@@ -110,7 +109,6 @@ if count > 0:
         </div>
     """, unsafe_allow_html=True)
 
-# 2. 【エリア1】発注処理待ち（ここだけは常に表示）
 st.subheader("📝 1. 発注処理待ち")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
@@ -128,12 +126,11 @@ if not pending_df.empty:
         with st.form("process_form"):
             payload = {}
             vendor_list = df_vendor["vendor_name"].tolist() if not df_vendor.empty else []
-           for sid in selected_ids:
+            for sid in selected_ids:
                 row = pending_df[pending_df["id"] == sid].iloc[0]
                 st.markdown(f"**📍 {row['item_name']} ({row['product_name']})**")
                 c1, c2, c3 = st.columns(3)
                 
-                # ここで1つずつ情報を入力してもらう
                 qty_input = c1.number_input("数量", min_value=1, key=f"q_{sid}")
                 
                 if vendor_list:
@@ -143,7 +140,6 @@ if not pending_df.empty:
                 
                 date_input = c3.date_input("納品予定", key=f"d_{sid}")
                 
-                # ここで「注文セット」としてまとめる
                 payload[sid] = {
                     "qty": qty_input, 
                     "vendor": vendor_input, 
@@ -158,9 +154,8 @@ if not pending_df.empty:
 else:
     st.info("現在、新規の依頼はありません。")
 
-st.markdown("<br>", unsafe_allow_html=True) # 少し余白
+st.markdown("<br>", unsafe_allow_html=True)
 
-# 3. 【エリア2】発注済み（入荷待ち）を折りたたみ化
 with st.expander(f"🚚 2. 発注済み・入荷待ち ({len(ordered_df)}件)", expanded=False):
     if not ordered_df.empty:
         ordered_df.insert(0, "入荷", False)
@@ -172,7 +167,6 @@ with st.expander(f"🚚 2. 発注済み・入荷待ち ({len(ordered_df)}件)", 
             disabled=["category", "item_name", "product_name", "vendor", "order_date"],
             key="ordered_editor"
         )
-        
         if st.button("✅ チェックした項目の納品を確定", type="primary", use_container_width=True):
             for i, row in edited_ordered.iterrows():
                 orig_id = row["id"]
@@ -186,7 +180,6 @@ with st.expander(f"🚚 2. 発注済み・入荷待ち ({len(ordered_df)}件)", 
     else:
         st.write("現在、入荷待ちの資材はありません。")
 
-# 4. 【エリア3】完了履歴を折りたたみ化
 done_df = df_orders[df_orders['status'] == '完了'].sort_values("delivery_date", ascending=False)
 with st.expander(f"📑 3. 完了履歴 (直近{len(done_df.head(30))}件)", expanded=False):
     if not done_df.empty:
