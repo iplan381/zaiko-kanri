@@ -90,14 +90,14 @@ with st.sidebar:
                         st.toast(f"✅ 「{m_item}」を登録しました")
                         st.rerun()
      with st.expander("🏢 発注先マスタ登録"):
-        with st.form("vendor_form", clear_on_submit=True):
-            v_name = st.text_input("発注先名（仕入先）")
-            if st.form_submit_button("発注先を追加", use_container_width=True):
-                if v_name:
-                    new_v_row = pd.DataFrame([{"vendor_name": v_name}])
-                    df_v_updated = pd.concat([df_vendor, new_v_row], ignore_index=True).drop_duplicates()
-                    update_github_data(FILE_PATH_VENDOR, df_v_updated, sha_vendor, "Update Vendor Master")
-                    st.rerun()                   
+     with st.form("vendor_form", clear_on_submit=True):
+        v_name = st.text_input("発注先名（仕入先）")
+        if st.form_submit_button("発注先を追加", use_container_width=True):
+            if v_name:
+                new_v_row = pd.DataFrame([{"vendor_name": v_name}])
+                df_v_updated = pd.concat([df_vendor, new_v_row], ignore_index=True).drop_duplicates()
+                update_github_data(FILE_PATH_VENDOR, df_v_updated, sha_vendor, "Update Vendor Master")
+                st.rerun()                   
 
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
