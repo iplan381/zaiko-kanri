@@ -154,6 +154,6 @@ else:
 st.divider()
 
 # 4. 【エリア3】履歴（完了分）
-st.subheader("📑 3. 完了履歴（直近30件）")
+st.subheader("📑 完了履歴（直近30件）")
 done_df = df_orders[df_orders['status'] == '完了'].sort_values("delivery_date", ascending=False)
 st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
