@@ -55,6 +55,13 @@ count = len(pending_df)
 
 # --- 👈 サイドバー：新規発注依頼 ---
 with st.sidebar:
+    st.title("🔗 クイック移動")
+    col1, col2 = st.columns(2)
+    col1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/") # 在庫のURL
+    col2.link_button("📊 分析画面", "https://bunseki-kanri.streamlit.app/") # 分析のURL
+    st.divider()
+
+with st.sidebar:
     st.title("➕ 新規発注依頼")
     st.divider()
     if df_master.dropna(how='all').empty:
