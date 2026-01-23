@@ -91,6 +91,13 @@ df_stock, df_log = process_reservations(df_stock, sha_stock, df_log, sha_log)
 
 # --- 3. サイドバー：新規商品登録 ---
 with st.sidebar:
+    st.title("🔗 クイック移動")
+    col1, col2 = st.columns(2)
+    col1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/") # 在庫のURL
+    col2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//") # 分析のURL
+    st.divider()
+
+with st.sidebar:
     st.header("✨ 新規商品登録")
     n_item = st.text_input("商品名", key="sidebar_n_item")
     n_size = st.selectbox("サイズ", SIZES_MASTER, key="sidebar_n_size")
