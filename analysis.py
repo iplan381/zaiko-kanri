@@ -41,6 +41,12 @@ if not df_log_raw.empty:
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
     # --- 🔍 絞り込み条件（サイドバー） ---
+    with st.sidebar:
+        st.markdown("### 🚀 クイック移動")
+        c1, c2 = st.columns(2)
+        c1.link_button("📝 発注管理", "https://your-order-app.streamlit.app/")
+        c2.link_button("📦 在庫CSV", "https://github.com/...")
+        st.divider()
     
     st.sidebar.header("🔍 絞り込み条件")
     
