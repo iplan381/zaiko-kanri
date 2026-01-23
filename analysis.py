@@ -44,8 +44,8 @@ if not df_log_raw.empty:
     with st.sidebar:
         st.markdown("### 🚀 クイック移動")
         c1, c2 = st.columns(2)
-        c1.link_button("📝 発注管理", "https://your-order-app.streamlit.app/")
-        c2.link_button("📦 在庫CSV", "https://github.com/...")
+        c1.link_button("📦 在庫管理", "https://github.com/iplan381/zaiko-kanri/blob/main/stock_master.csv")
+        c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
         st.divider()
     
     st.sidebar.header("🔍 絞り込み条件")
