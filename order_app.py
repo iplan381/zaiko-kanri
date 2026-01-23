@@ -8,7 +8,7 @@ import io
 # --- 1. 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
-FILE_PATH_MASTER = "material_master.csv" # 新しいマスタファイル
+FILE_PATH_MASTER = "material_master.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 # --- 2. GitHub連携関数 ---
@@ -37,58 +37,110 @@ def update_github_data(file_path, df, sha, message):
 st.set_page_config(page_title="資材管理システム", layout="wide", page_icon="📦")
 
 # データ読み込み
-df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"])
-df_master, sha_master = get_github_data(FILE_PATH_MASTER, ["item_name", "product_name"])
+order_cols = ["id","category","item_name","product_name","request_date","quantity","vendor","order_date","delivery_date","status"]
+df_orders, sha_orders = get_github_data(FILE_PATH_ORDERS, order_cols)
+master_cols = ["category", "item_name", "product_name"]
+df_master, sha_master = get_github_data(FILE_PATH_MASTER, master_cols)
 
-# タブ分け
-tab1, tab2 = st.tabs(["🛒 発注・管理", "⚙️ マスタ登録"])
+tab1, tab2, tab3 = st.tabs(["🛒 発注・管理", "⚙️ マスタ登録", "📑 履歴確認"])
 
 # --- タブ1：発注・管理 ---
 with tab1:
     st.title("📦 資材発注管理")
     
-    # 現場：発注依頼
+    # 【A】現場：発注依頼
     st.header("🛒 現場：発注依頼")
     with st.expander("➕ 新規依頼フォーム", expanded=False):
         if df_master.empty:
-            st.info("先にマスタ登録タブから資材と商品を登録してください。")
+            st.info("マスタ登録タブから資材を登録してください。")
         else:
-            # 【重要】資材名を選んだら、商品名を絞り込む
-            unique_items = df_master["item_name"].unique()
-            c_item = st.selectbox("資材名を選択", unique_items)
-            
-            # 選ばれた資材名に紐づく商品名だけにフィルター
-            filtered_products = df_master[df_master["item_name"] == c_item]["product_name"].tolist()
-            c_prod = st.selectbox("該当する商品名を選択", filtered_products)
+            u_cat = df_master["category"].unique()
+            c_cat = st.selectbox("カテゴリを選択", u_cat)
+            u_item = df_master[df_master["category"] == c_cat]["item_name"].unique()
+            c_item = st.selectbox("資材名を選択", u_item)
+            u_prod = df_master[(df_master["category"] == c_cat) & (df_master["item_name"] == c_item)]["product_name"].unique()
+            c_prod = st.selectbox("商品名を選択", u_prod)
             
             if st.button("依頼を送信", type="primary"):
                 new_id = int(df_orders['id'].max() + 1) if not df_orders.empty else 1
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                new_row = pd.DataFrame([{"id": new_id, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
+                new_row = pd.DataFrame([{"id": new_id, "category": c_cat, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
                 df_updated = pd.concat([df_orders, new_row], ignore_index=True)
                 if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
                     st.success("依頼完了！")
                     st.rerun()
 
-    # (中略：担当者処理・履歴表示は前回のコードと同じ)
+    st.divider()
+
+    # 【B】担当者：発注処理（チェックボックス方式）
+    st.header("📝 担当者：発注処理")
+    pending_df = df_orders[df_orders['status'] == '未対応'].copy()
+    
+    if not pending_df.empty:
+        st.write("処理する項目にチェックを入れてください：")
+        
+        # 編集用の一時的な列を追加
+        pending_df.insert(0, "選択", False)
+        
+        # チェックボックス付きの表を表示
+        edited_df = st.data_editor(
+            pending_df[["選択", "id", "category", "item_name", "product_name", "request_date"]],
+            hide_index=True,
+            use_container_width=True,
+            disabled=["id", "category", "item_name", "product_name", "request_date"] # チェック以外は編集不可
+        )
+        
+        # チェックが入ったIDを特定
+        selected_ids = edited_df[edited_df["選択"] == True]["id"].tolist()
+
+        if selected_ids:
+            st.markdown(f"### 📋 選択中: {len(selected_ids)}件 の入力")
+            with st.form("order_process_form"):
+                payload = {}
+                for sid in selected_ids:
+                    row_info = pending_df[pending_df["id"] == sid].iloc[0]
+                    st.markdown(f"**📍 ID:{sid} | {row_info['item_name']} ({row_info['product_name']})**")
+                    col1, col2, col3 = st.columns(3)
+                    with col1: q = st.number_input(f"数量", min_value=1, key=f"q_{sid}")
+                    with col2: v = st.text_input(f"発注先", key=f"v_{sid}")
+                    with col3: d = st.date_input(f"納品予定", key=f"d_{sid}")
+                    payload[sid] = {"qty": q, "vendor": v, "date": d}
+                
+                if st.form_submit_button("✅ チェックした項目をすべて更新", use_container_width=True):
+                    for oid, v in payload.items():
+                        idx = df_orders[df_orders['id'] == oid].index[0]
+                        df_orders.at[idx, 'quantity'] = v['qty']
+                        df_orders.at[idx, 'vendor'] = v['vendor']
+                        df_orders.at[idx, 'order_date'] = datetime.now().strftime("%Y-%m-%d")
+                        df_orders.at[idx, 'delivery_date'] = str(v['date'])
+                        df_orders.at[idx, 'status'] = "発注済み"
+                    
+                    if update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Batch Update") in [200, 201]:
+                        st.success("一括更新が完了しました！")
+                        st.rerun()
+    else:
+        st.info("現在、対応が必要な依頼はありません。")
 
 # --- タブ2：マスタ登録 ---
 with tab2:
-    st.header("⚙️ 資材・商品マスタ登録")
-    st.write("ここで登録した「資材名」と「商品名」が、依頼フォームの選択肢になります。")
-    
+    st.header("⚙️ マスタ登録")
     with st.form("master_form"):
-        new_item = st.text_input("資材名 (例: 化粧箱A)")
-        new_prod = st.text_input("商品名 (例: クッキーセット)")
+        m_cat = st.selectbox("カテゴリ", ["化粧箱", "トレイ", "ダンボール", "その他"])
+        m_item = st.text_input("資材名 (例: サービス箱B)")
+        m_prod = st.text_input("商品名 (例: ショートケーキ用)")
         if st.form_submit_button("マスタに追加"):
-            if new_item and new_prod:
-                new_m_row = pd.DataFrame([{"item_name": new_item, "product_name": new_prod}])
+            if m_item and m_prod:
+                new_m_row = pd.DataFrame([{"category": m_cat, "item_name": m_item, "product_name": m_prod}])
                 df_m_updated = pd.concat([df_master, new_m_row], ignore_index=True).drop_duplicates()
                 if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
-                    st.success(f"登録しました: {new_item} - {new_prod}")
+                    st.success("マスタを更新しました！")
                     st.rerun()
-            else:
-                st.error("両方の項目を入力してください。")
 
     st.subheader("現在の登録内容")
     st.dataframe(df_master, use_container_width=True, hide_index=True)
+
+# --- タブ3：履歴確認 ---
+with tab3:
+    st.header("📑 全発注履歴")
+    if not df_orders.empty:
+        st.dataframe(df_orders.sort_values("id", ascending=False), use_container_width=True, hide_index=True)
