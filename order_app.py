@@ -68,7 +68,6 @@ with st.sidebar:
                 st.rerun()
     
     st.divider()
-    # マスタ登録はサイドバーの下の方に配置
     with st.expander("⚙️ マスタ登録・編集"):
         with st.form("master_form"):
             m_cat = st.selectbox("カテゴリ", ["化粧箱", "トレイ", "ダンボール", "その他"])
@@ -84,23 +83,22 @@ with st.sidebar:
 # --- メイン画面 ---
 st.title("📦 資材管理メインボード")
 
-# 1. 未処理件数の目立つ表示
+# 1. 未処理件数の控えめな表示
 pending_df = df_orders[df_orders['status'] == '未対応'].copy()
 count = len(pending_df)
 
 if count > 0:
-    # 赤背景に白文字の目立つスタイル
-    st.markdown(f"""
-        <div style="background-color: #ff4b4b; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 25px;">
-            <h1 style="color: white; margin: 0;">⚠️ 未対応の依頼が {count} 件 あります</h1>
-            <p style="color: white; margin: 5px 0 0 0;">下のリストからチェックを入れて発注処理を行ってください。</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # 派手な赤背景をやめて、メトリック（指標）と標準の警告ボックスに変更
+    col_stat, _ = st.columns([1, 2])
+    with col_stat:
+        st.metric(label="未対応の依頼数", value=f"{count} 件", delta_color="inverse")
+    
+    st.warning(f"現在、{count}件の未処理依頼があります。下のリストから対応をお願いします。")
 else:
     st.success("✅ すべての依頼が処理済みです。")
 
 # 2. 発注処理エリア
-st.header("📝 発注処理（未対応リスト）")
+st.subheader("📝 発注処理")
 if not pending_df.empty:
     pending_df.insert(0, "選択", False)
     show_cols = ["選択", "category", "item_name", "product_name", "request_date"]
@@ -125,7 +123,7 @@ if not pending_df.empty:
                 with c3: d = st.date_input(f"納品予定", key=f"d_{sid}")
                 payload[sid] = {"qty": q, "vendor": v, "date": d}
             
-            if st.form_submit_button("✅ チェックした項目をすべて確定して発注済みにする", use_container_width=True):
+            if st.form_submit_button("✅ チェックした項目をすべて確定", use_container_width=True):
                 for oid, v in payload.items():
                     idx = df_orders[df_orders['id'] == oid].index[0]
                     df_orders.at[idx, 'quantity'], df_orders.at[idx, 'vendor'] = v['qty'], v['vendor']
@@ -138,14 +136,11 @@ if not pending_df.empty:
 else:
     st.info("現在、処理待ちのデータはありません。")
 
-st.divider()
+st.markdown("---")
 
 # 3. 履歴エリア（処理の下に配置）
-st.header("📑 発注履歴（最近の30件）")
+st.subheader("📑 発注履歴（最近の30件）")
 history_cols = ["status", "category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]
 if not df_orders.empty:
-    # ステータスが「発注済み」のものを上に、日付が新しい順に表示
     history_df = df_orders[history_cols].sort_values(by=["status", "request_date"], ascending=[False, False])
     st.dataframe(history_df.head(30), use_container_width=True, hide_index=True)
-else:
-    st.write("履歴はまだありません。")
