@@ -89,8 +89,8 @@ with st.sidebar:
                     if update_github_data(FILE_PATH_MASTER, df_m_updated, sha_master, "Update Master") in [200, 201]:
                         st.toast(f"✅ 「{m_item}」を登録しました")
                         st.rerun()
-     with st.expander("🏢 発注先マスタ登録"):
-     with st.form("vendor_form", clear_on_submit=True):
+    with st.expander("🏢 発注先マスタ登録"):
+    with st.form("vendor_form", clear_on_submit=True):
         v_name = st.text_input("発注先名（仕入先）")
         if st.form_submit_button("発注先を追加", use_container_width=True):
             if v_name:
