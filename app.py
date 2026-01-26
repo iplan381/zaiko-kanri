@@ -125,6 +125,10 @@ with st.sidebar:
 st.title("📦 在庫管理")
 
 c1, c2, c3, c4 = st.columns(4)
+st.write("--- デバッグ情報 ---")
+st.write("df_stock の列名:", df_stock.columns.tolist())
+st.write("df_stock の中身が空か:", df_stock.empty)
+st.write("------------------")
 with c1: s_item = st.selectbox("検索:商品名", get_opts(df_stock["商品名"]), key="filter_item")
 with c2: s_size = st.selectbox("検索:サイズ", get_opts(df_stock["サイズ"]), key="filter_size")
 with c3: search_loc = st.text_input("検索:地名（手入力）", placeholder="例: 青森", key="filter_loc")
