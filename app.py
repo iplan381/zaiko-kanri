@@ -176,17 +176,18 @@ if selected_indices:
                 with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
                 update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
 
-      # --- 確定ボタンの代わりにポップオーバー（確認画面）を設置 ---
-        with st.popover("✅ 入力内容を確認して確定する", use_container_width=True, help="クリックして内容を最終確認します"):
+     # --- 確定ボタンの代わりにポップオーバー（確認画面）を設置 ---
+        with st.popover("✅ 入力内容を確認して確定する", use_container_width=True):
             st.markdown("### ⚠️ 以下の内容で確定しますか？")
             
-            # 変更内容をリストアップして見せる
+            # 変更内容をリストアップして表示
             summary_list = []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
+                # 列名を row["アラート基準"] に修正
                 if p["delete"]:
                     summary_list.append(f"🔥 **削除**: {row['商品名']} ({row['サイズ']}/{row['地名']})")
-                elif p["qty"] != 0 or p["loc"] != row["地名"] or p["alert"] != row["alert"]:
+                elif p["qty"] != 0 or p["loc"] != row["地名"] or p["alert"] != row["アラート基準"]:
                     summary_list.append(f"📝 **{p['type']}**: {row['商品名']} ({row['サイズ']}) 数量:{p['qty']} / 地名:{p['loc']}")
             
             if summary_list:
@@ -195,11 +196,9 @@ if selected_indices:
                 
                 st.warning("この操作は取り消せません。よろしいですか？")
                 
-                # ポップオーバーの中に本番の確定ボタンを置く
                 if st.button("🚀 実行する", type="primary", use_container_width=True):
                     now, new_logs, new_reservations = get_now_jst(), [], []
                     
-                    # --- ここに元の更新ロジック（for idx, p in update_payload.items(): ...）を入れる ---
                     for idx, p in update_payload.items():
                         row = p["orig_data"]
                         target_mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
@@ -223,17 +222,16 @@ if selected_indices:
                                 if p["loc"] != row["地名"]: 
                                     new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": "地名変更", "数量": 0, "在庫数": curr_stock, "担当者": user_name})
 
-                    # GitHub更新
-                    update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update")
-                    if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
-                    if new_reservations:
-                        df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
-                        update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
-                    
-                    st.success("更新が完了しました！")
-                    st.rerun()
+                    # GitHub更新実行
+                    if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update"):
+                        if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
+                        if new_reservations:
+                            df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
+                            update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
+                        st.success("更新が完了しました！")
+                        st.rerun()
             else:
-                st.info("変更内容がありません。")
+                st.info("変更内容が入力されていません。")
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
 
