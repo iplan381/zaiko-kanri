@@ -30,6 +30,7 @@ def get_github_data(file_path):
         content = res.json()
         csv_text = base64.b64decode(content["content"]).decode("utf-8-sig")
         df = pd.read_csv(StringIO(csv_text))
+        df.columns = df.columns.str.strip()
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
