@@ -196,7 +196,7 @@ if selected_indices:
                 
                 st.warning("この操作は取り消せません。よろしいですか？")
                 
-                if st.button("🚀 実行する", type="primary", use_container_width=True):
+                if st.button("👌 実行する", type="primary", use_container_width=True):
                     now, new_logs, new_reservations = get_now_jst(), [], []
                     
                     for idx, p in update_payload.items():
