@@ -6,7 +6,7 @@ import requests
 from io import StringIO
 
 def get_now_jst():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 # --- 1. 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri" 
@@ -302,7 +302,8 @@ if not df_log.empty:
     col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2]) # 配置バランス調整
     
     with col_log1:
-        df_log["日時"] = pd.to_datetime(df_log["日時"])
+        df_log["日時"] = pd.to_datetime(df_log["日時"], errors='coerce')
+        df_log = df_log.dropna(subset=["日時"])
         min_date, max_date = df_log["日時"].min().date(), df_log["日時"].max().date()
         log_date_range = st.date_input("期間", value=(min_date, max_date), key="log_date_filter")
     
