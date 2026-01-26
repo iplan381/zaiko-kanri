@@ -28,9 +28,13 @@ def get_github_data(file_path):
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
         content = res.json()
+        # ↓ utf-8 を utf-8-sig に変更（目に見えないBOMゴミ対策）
         csv_text = base64.b64decode(content["content"]).decode("utf-8-sig")
         df = pd.read_csv(StringIO(csv_text))
+        
+        # ↓ 【重要】列名の前後に空白や改行が入っていたら強制削除
         df.columns = df.columns.str.strip()
+        
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
