@@ -28,13 +28,17 @@ def get_github_data(file_path):
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
         content = res.json()
-        # ↓ utf-8 を utf-8-sig に変更（目に見えないBOMゴミ対策）
+        # 1. decodeを 'utf-8-sig' にしてBOM（見えないゴミ）を除去
         csv_text = base64.b64decode(content["content"]).decode("utf-8-sig")
         df = pd.read_csv(StringIO(csv_text))
         
-        # ↓ 【重要】列名の前後に空白や改行が入っていたら強制削除
-        df.columns = df.columns.str.strip()
+        # 2. 列名の前後の空白・改行・見えない文字を徹底的に掃除
+        df.columns = df.columns.str.strip().str.replace('﻿', '') 
         
+        # 3. 万が一、空のデータが来た場合の回避策
+        if df.empty:
+            st.error(f"⚠️ {file_path} の中身が空っぽです")
+            
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
