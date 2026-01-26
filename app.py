@@ -28,17 +28,8 @@ def get_github_data(file_path):
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
         content = res.json()
-        # 1. decodeを 'utf-8-sig' にしてBOM（見えないゴミ）を除去
-        csv_text = base64.b64decode(content["content"]).decode("utf-8-sig")
+        csv_text = base64.b64decode(content["content"]).decode("utf-8")
         df = pd.read_csv(StringIO(csv_text))
-        
-        # 2. 列名の前後の空白・改行・見えない文字を徹底的に掃除
-        df.columns = df.columns.str.strip().str.replace('﻿', '') 
-        
-        # 3. 万が一、空のデータが来た場合の回避策
-        if df.empty:
-            st.error(f"⚠️ {file_path} の中身が空っぽです")
-            
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
@@ -125,10 +116,6 @@ with st.sidebar:
 st.title("📦 在庫管理")
 
 c1, c2, c3, c4 = st.columns(4)
-st.write("--- デバッグ情報 ---")
-st.write("df_stock の列名:", df_stock.columns.tolist())
-st.write("df_stock の中身が空か:", df_stock.empty)
-st.write("------------------")
 with c1: s_item = st.selectbox("検索:商品名", get_opts(df_stock["商品名"]), key="filter_item")
 with c2: s_size = st.selectbox("検索:サイズ", get_opts(df_stock["サイズ"]), key="filter_size")
 with c3: search_loc = st.text_input("検索:地名（手入力）", placeholder="例: 青森", key="filter_loc")
