@@ -174,7 +174,7 @@ with st.expander(f"🚚 発注済み・入荷待ち ({len(ordered_df)}件)", exp
             disabled=["category", "item_name", "product_name", "vendor", "order_date"],
             key="ordered_editor"
         )
-        if st.button("✅ チェックした項目の納品を確定", type="primary", use_container_width=True):
+        if st.button("✅ チェック項目の納品を確認しました", type="primary", use_container_width=True):
             for i, row in edited_ordered.iterrows():
                 orig_id = row["id"]
                 idx = df_orders[df_orders["id"] == orig_id].index[0]
