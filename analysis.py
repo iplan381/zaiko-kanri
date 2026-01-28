@@ -31,7 +31,8 @@ st.title("📈 在庫動態分析")
 if not df_log_raw.empty:
     # --- データ前処理 ---
     df = df_log_raw.copy()
-    df["日時"] = pd.to_datetime(df["日時"])
+    df["日時"] = pd.to_datetime(df["日時"], errors='coerce')
+    df = df.dropna(subset=["日時"])
     df["年"] = df["日時"].dt.year
     df["月"] = df["日時"].dt.month
     df["週"] = df["日時"].dt.isocalendar().week
