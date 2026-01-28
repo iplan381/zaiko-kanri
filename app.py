@@ -90,6 +90,14 @@ df_res_all, sha_res_all = get_github_data(FILE_PATH_RESERVATION)
 df_stock, df_log = process_reservations(df_stock, sha_stock, df_log, sha_log)
 
 # --- 3. サイドバー：新規商品登録 ---
+
+with st.sidebar:
+        st.markdown("### 🔗 クイック移動")
+        c1, c2 = st.columns(2)
+        c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
+        c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
+        st.divider()
+
 with st.sidebar:
     st.header("✨ 新規商品登録")
     n_item = st.text_input("商品名", key="sidebar_n_item")
