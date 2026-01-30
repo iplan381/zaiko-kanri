@@ -26,9 +26,10 @@ def get_github_data(file_path):
 
 df_log_raw = get_github_data(FILE_PATH_LOG)
 
-st.title("📈 在庫動態分析（期間比較モード）")
+st.title("📈 在庫動態分析 (期間比較モード)")
 
 if not df_log_raw.empty:
+    # --- データ前処理 ---
     df = df_log_raw.copy()
     df["日時"] = pd.to_datetime(df["日時"], errors='coerce', format='mixed')
     df = df.dropna(subset=["日時"])
@@ -37,112 +38,124 @@ if not df_log_raw.empty:
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
-   with st.sidebar:
+    # --- 🔍 絞り込み条件（サイドバー） ---
+    with st.sidebar:
         st.markdown("### 🔗 クイック移動")
         c1, c2 = st.columns(2)
         c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
         st.divider()
     
-        st.sidebar.header("🔍 期間設定")
+        st.header("🔍 期間設定")
         
-        # 💡 エラー回避：最小・最大の値を安全に取得
-        min_d = df_out_all["日時"].min().date()
-        max_d = df_out_all["日時"].max().date()
+        # 日付の安全な取得
+        data_min = df_out_all["日時"].min().date()
+        data_max = df_out_all["日時"].max().date()
         
-        # もしデータが1日分しかない場合に備えてガード
-        if min_d >= max_d:
-            min_d = max_d - dt.timedelta(days=1)
-
-        # 📅 メイン期間（期間A）：初期値がmin_dより前にならないように調整
+        # 【期間A】メイン期間
         st.subheader("① 分析期間 (メイン)")
-        start_a = max(min_d, max_d - dt.timedelta(days=30)) # 枠外にはみ出さないようガード
-        range_a = st.date_input("分析したい期間を選択", [start_a, max_d], min_value=min_d, max_value=max_d, key="range_a")
+        val_a_start = max(data_min, data_max - dt.timedelta(days=30))
+        range_a = st.date_input("分析期間を選択", [val_a_start, data_max], min_value=data_min, max_value=data_max, key="ra")
 
-        # 📅 比較期間（期間B）：同様に枠内ガード
+        # 【期間B】比較期間
         st.subheader("② 比較期間 (ターゲット)")
-        start_b = max(min_d, max_d - dt.timedelta(days=61))
-        end_b = max(min_d, max_d - dt.timedelta(days=31))
-        # 比較用なので初期値はメインと被らないように設定
-        range_b = st.date_input("比較したい過去の期間を選択", [start_b, end_b], min_value=min_d, max_value=max_d, key="range_b")
+        val_b_start = max(data_min, data_max - dt.timedelta(days=61))
+        val_b_end = max(data_min, data_max - dt.timedelta(days=31))
+        range_b = st.date_input("比較期間を選択", [val_b_start, val_b_end], min_value=data_min, max_value=data_max, key="rb")
+
         st.divider()
-        st.header("📦 絞り込み")
-        all_item = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
-        all_size = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
-        all_loc = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
+        st.header("📦 絞り込み条件")
+        all_items = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
+        all_sizes = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
+        all_locs = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
 
-        sel_item = st.selectbox("商品名", all_item)
-        sel_size = st.selectbox("サイズ", all_size)
-        sel_loc = st.selectbox("地名", all_loc)
-        show_compare = st.checkbox("🔄 比較を表示する", value=True)
+        sel_item = st.selectbox("商品名", all_items)
+        sel_size = st.selectbox("サイズ", all_sizes)
+        sel_loc = st.selectbox("地名", all_locs)
+        show_compare = st.checkbox("🔄 期間比較を表示する", value=True)
 
-    # 期間Aの抽出
+    # --- 期間確定と抽出 ---
     if isinstance(range_a, (list, tuple)) and len(range_a) == 2:
-        df_final = df_out_all[(df_out_all["日時"].dt.date >= range_a[0]) & (df_out_all["日時"].dt.date <= range_a[1])]
+        df_a = df_out_all[(df_out_all["日時"].dt.date >= range_a[0]) & (df_out_all["日時"].dt.date <= range_a[1])]
     else:
-        st.info("左側メニューで「分析期間」を2箇所選択してください。")
+        st.info("左側で「分析期間」を2箇所クリックしてください。")
         st.stop()
 
-    # 期間Bの抽出
     if isinstance(range_b, (list, tuple)) and len(range_b) == 2:
-        df_compare = df_out_all[(df_out_all["日時"].dt.date >= range_b[0]) & (df_out_all["日時"].dt.date <= range_b[1])]
+        df_b = df_out_all[(df_out_all["日時"].dt.date >= range_b[0]) & (df_out_all["日時"].dt.date <= range_b[1])]
     else:
-        df_compare = pd.DataFrame()
+        df_b = pd.DataFrame()
 
-    # フィルタ適用（共通）
-    for target_df in [df_final, df_compare]:
-        if not target_df.empty:
-            if sel_item != "すべて表示": target_df = target_df[target_df["商品名"] == sel_item]
-            if sel_size != "すべて表示": target_df = target_df[target_df["サイズ"] == sel_size]
-            if sel_loc != "すべて表示": target_df = target_df[target_df["地名"] == sel_loc]
+    # --- 共通フィルタ適用 ---
+    if sel_item != "すべて表示":
+        df_a = df_a[df_a["商品名"] == sel_item]
+        df_b = df_b[df_b["商品名"] == sel_item] if not df_b.empty else df_b
+    if sel_size != "すべて表示":
+        df_a = df_a[df_a["サイズ"] == sel_size]
+        df_b = df_b[df_b["サイズ"] == sel_size] if not df_b.empty else df_b
+    if sel_loc != "すべて表示":
+        df_a = df_a[df_a["地名"] == sel_loc]
+        df_b = df_b[df_b["地名"] == sel_loc] if not df_b.empty else df_b
 
     st.divider()
 
-    if not df_final.empty:
-        qty_a = df_final["数量"].sum()
-        qty_b = df_compare["数量"].sum() if not df_compare.empty else 0
+    # --- 📊 表示エリア ---
+    if not df_a.empty:
+        qty_a = df_a["数量"].sum()
+        qty_b = df_b["数量"].sum() if not df_b.empty else 0
         
         if show_compare:
             k1, k2, k3, k4 = st.columns(4)
             diff_pct = f"{round(((qty_a - qty_b) / qty_b) * 100, 1)}%" if qty_b > 0 else "---"
-            with k1: st.metric("分析期間 合計", f"{int(qty_a):,}")
-            with k2: st.metric("比較期間 実績", f"{int(qty_b):,}")
-            with k3: st.metric("比較増減率", diff_pct, delta=f"{int(qty_a - qty_b):,}")
-            with k4: st.metric("メイン項目数", f"{df_final['項目詳細'].nunique()}")
+            k1.metric("分析期間 合計", f"{int(qty_a):,}")
+            k2.metric("比較期間 合績", f"{int(qty_b):,}")
+            k3.metric("増減率", diff_pct, delta=f"{int(qty_a - qty_b):,}")
+            k4.metric("メイン項目数", f"{df_a['項目詳細'].nunique()}")
         else:
             k1, k2, k3 = st.columns(3)
-            with k1: st.metric("分析期間 合計", f"{int(qty_a):,}")
-            with k2: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
-            with k3: st.metric("項目数", f"{df_final['項目詳細'].nunique()}")
+            k1.metric("分析期間 合計", f"{int(qty_a):,}")
+            k2.metric("平均出荷量", f"{round(df_a['数量'].mean(), 1)}")
+            k3.metric("メイン項目数", f"{df_a['項目詳細'].nunique()}")
 
         tab1, tab2, tab4, tab5 = st.tabs(["📊 傾向", "📈 トレンド推移", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
 
         with tab1:
-            st.subheader("📦 分析期間のランキング")
-            summary = df_final.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).tail(20).reset_index()
+            st.subheader("📦 分析期間のランキング (上位20)")
+            summary = df_a.groupby("項目詳細")["数量"].sum().sort_values(ascending=True).tail(20).reset_index()
             st.plotly_chart(px.bar(summary, y="項目詳細", x="数量", orientation='h', text_auto=True), use_container_width=True)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("📍 地名別 (分析期間)")
+                st.plotly_chart(px.pie(df_a, values='数量', names='地名', hole=0.4), use_container_width=True)
+            with c2:
+                st.subheader("📅 曜日別傾向 (クリックで内訳)")
+                df_a["曜日"] = df_a["日時"].dt.day_name()
+                day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
+                summary_day = df_a.groupby("曜日")["数量"].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']).reset_index()
+                summary_day["表示曜日"] = summary_day["曜日"].map(day_jp)
+                fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True)
+                selected = st.plotly_chart(fig_day, use_container_width=True, on_select="rerun")
+                
+                if selected and "selection" in selected and selected["selection"]["points"]:
+                    sel_d = selected["selection"]["points"][0]["x"]
+                    st.info(f"📅 {sel_d}曜日の詳細")
+                    st.dataframe(df_a[df_a["曜日"].map(day_jp) == sel_d].groupby("項目詳細")["数量"].sum().sort_values(ascending=False), use_container_width=True)
 
         with tab2:
             st.subheader("📈 トレンド推移")
-            # 期間AとBを一つのグラフに重ねるか、別々に出すか選べるけど、まずはメインを表示
-            df_trend = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
-            st.plotly_chart(px.line(df_trend, x="日時", y="数量", markers=True, title="メイン期間の推移"), use_container_width=True)
+            trend_a = df_a.groupby(df_a["日時"].dt.date)["数量"].sum().reset_index()
+            st.plotly_chart(px.line(trend_a, x="日時", y="数量", markers=True), use_container_width=True)
 
         with tab4:
-            # 不動在庫などはメイン期間に基づいて表示
             col_w1, col_w2 = st.columns(2)
             with col_w1:
-                st.subheader("⚠️ メイン期間内の不動")
-                dead = df_final.groupby("項目詳細")["日時"].max().reset_index().rename(columns={"日時": "最終"})
-                st.dataframe(dead.sort_values("最終", ascending=False), use_container_width=True, hide_index=True)
+                st.subheader("⚠️ メイン期間の不動在庫")
+                dead = df_a.groupby("項目詳細")["日時"].max().reset_index().rename(columns={"日時": "最終"})
+                dead["経過日数"] = (pd.Timestamp.now() - dead["最終"]).dt.days
+                st.dataframe(dead.sort_values("経過日数", ascending=False), use_container_width=True, hide_index=True)
             with col_w2:
                 st.subheader("💡 推奨在庫 (メイン期間ベース)")
-                safety = df_final.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
+                safety = df_a.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
                 safety["推奨"] = (safety["mean"] + 2 * safety["std"]).round(0)
-                st.dataframe(safety.sort_values("推奨", ascending=False), use_container_width=True, hide_index=True)
-
-        with tab5:
-            st.subheader("🔢 履歴明細 (分析期間)")
-            st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
-    else:
-        st.info("条件に一致するデータがありません。")
+                st.dataframe(safety.sort_values("推奨", ascending=False), use_
