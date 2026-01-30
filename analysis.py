@@ -4,7 +4,7 @@ import plotly.express as px
 import requests
 import base64
 from io import StringIO
-import datetime as dt # datetimeをdtとしてインポート
+import datetime as dt
 
 # --- 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri"
@@ -31,7 +31,6 @@ st.title("📈 在庫動態分析")
 if not df_log_raw.empty:
     # --- データ前処理 ---
     df = df_log_raw.copy()
-    # 💡 エラー対策：混合フォーマットに対応
     df["日時"] = pd.to_datetime(df["日時"], errors='coerce', format='mixed')
     df = df.dropna(subset=["日時"])
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
@@ -49,10 +48,9 @@ if not df_log_raw.empty:
     
         st.sidebar.header("🔍 絞り込み条件")
         
-        # 💡 カレンダーによる期間選択（年・月・週の選択から差し替え）
+        # カレンダーによる期間選択
         min_d = df_out_all["日時"].min().date()
         max_d = df_out_all["日時"].max().date()
-        # デフォルトは直近30日間
         start_default = max(min_d, max_d - dt.timedelta(days=30))
         date_range = st.date_input("📅 期間を選択", [start_default, max_d], min_value=min_d, max_value=max_d)
 
@@ -61,24 +59,28 @@ if not df_log_raw.empty:
         all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
         all_loc_list = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
 
-        sel_item = st.sidebar.selectbox("📦 商品名を選択", all_item_list)
-        sel_size = st.sidebar.selectbox("📏 サイズを選択", all_size_list)
-        sel_loc = st.sidebar.selectbox("📍 地名を選択", all_loc_list)
-        show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
+        sel_item = st.selectbox("📦 商品名を選択", all_item_list)
+        sel_size = st.selectbox("📏 サイズを選択", all_size_list)
+        sel_loc = st.selectbox("📍 地名を選択", all_loc_list)
+        
+        # ⭐ 追加：包装紙フィルタのチェックボックス
+        exclude_wrapping = st.checkbox("🎁 「包装紙」を除外する", value=False)
+        
+        show_compare = st.checkbox("🔄 昨年対比を表示する", value=True)
 
     # --- 最終的なフィルタリング実行 ---
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         start_date, end_date = date_range
-        # 期間フィルタ
-        df_final = df_out_all[(df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)]
-        # 昨年対比用フィルタ
+        df_final = df_out_all[(df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)].copy()
+        
+        # 昨年対比用
         ls, le = start_date - dt.timedelta(days=365), end_date - dt.timedelta(days=365)
-        df_last = df_out_all[(df_out_all["日時"].dt.date >= ls) & (df_out_all["日時"].dt.date <= le)]
+        df_last = df_out_all[(df_out_all["日時"].dt.date >= ls) & (df_out_all["日時"].dt.date <= le)].copy()
     else:
         st.info("カレンダーで開始日と終了日を選択してください。")
         st.stop()
 
-    # 商品・サイズ・地名フィルタ
+    # 共通フィルタ（商品・サイズ・地名）
     if sel_item != "すべて表示":
         df_final = df_final[df_final["商品名"] == sel_item]
         df_last = df_last[df_last["商品名"] == sel_item]
@@ -89,9 +91,14 @@ if not df_log_raw.empty:
         df_final = df_final[df_final["地名"] == sel_loc]
         df_last = df_last[df_last["地名"] == sel_loc]
 
+    # ⭐ 追加：包装紙除外ロジック（地名に「包装紙」が含まれる行を消す）
+    if exclude_wrapping:
+        df_final = df_final[~df_final["地名"].str.contains("包装紙", na=False)]
+        df_last = df_last[~df_last["地名"].str.contains("包装紙", na=False)]
+
     st.divider()
 
-    # --- 表示ロジック（提示されたコードのまま） ---
+    # --- 表示ロジック ---
     if not df_final.empty:
         qty_this = df_final["数量"].sum()
         qty_last = df_last["数量"].sum()
@@ -152,6 +159,9 @@ if not df_log_raw.empty:
                 if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
                 if sel_loc != "すべて表示": df_db = df_db[df_db["地名"] == sel_loc]
+                # ここも不動在庫判定で包装紙を除外したい場合は以下を有効化
+                if exclude_wrapping:
+                    df_db = df_db[~df_db["地名"].str.contains("包装紙", na=False)]
                 
                 now = pd.Timestamp.now()
                 dead = df_db.groupby("項目詳細")["日時"].max().reset_index()
