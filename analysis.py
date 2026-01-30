@@ -66,7 +66,7 @@ if not df_log_raw.empty:
         # ⭐ 追加：包装紙フィルタのチェックボックス
         exclude_wrapping = st.checkbox("包装紙を除外する", value=False)
         
-        show_compare = st.checkbox("🔄 昨年対比を表示する", value=True)
+        show_compare = st.checkbox("昨年対比を表示する", value=True)
 
     # --- 最終的なフィルタリング実行 ---
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
