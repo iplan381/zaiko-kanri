@@ -9,8 +9,7 @@ st.title("🏃 マラソンタイム予測AI")
 st.write("今の練習状況からフルマラソンのタイムを予測します。")
 
 # データの読み込み（パスを調整）
-base_dir = os.path.dirname(__file__)
-data_path = os.path.join(base_dir, '../data/training_log.csv')
+data_path = 'marathon/data/training_log.csv'
 
 if os.path.exists(data_path):
     df = pd.read_csv(data_path)
