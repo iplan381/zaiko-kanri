@@ -78,7 +78,7 @@ if not df_log_raw.empty:
     if isinstance(range_a, (list, tuple)) and len(range_a) == 2:
         df_a = df_out_all[(df_out_all["日時"].dt.date >= range_a[0]) & (df_out_all["日時"].dt.date <= range_a[1])]
     else:
-        st.info("左側で「分析期間」を2箇所クリックしてください。")
+        st.info("左側で「分析期間」を2箇所クリックして範囲を選択してください。")
         st.stop()
 
     if isinstance(range_b, (list, tuple)) and len(range_b) == 2:
@@ -108,7 +108,7 @@ if not df_log_raw.empty:
             k1, k2, k3, k4 = st.columns(4)
             diff_pct = f"{round(((qty_a - qty_b) / qty_b) * 100, 1)}%" if qty_b > 0 else "---"
             k1.metric("分析期間 合計", f"{int(qty_a):,}")
-            k2.metric("比較期間 合績", f"{int(qty_b):,}")
+            k2.metric("比較期間 合計", f"{int(qty_b):,}")
             k3.metric("増減率", diff_pct, delta=f"{int(qty_a - qty_b):,}")
             k4.metric("メイン項目数", f"{df_a['項目詳細'].nunique()}")
         else:
@@ -139,8 +139,10 @@ if not df_log_raw.empty:
                 
                 if selected and "selection" in selected and selected["selection"]["points"]:
                     sel_d = selected["selection"]["points"][0]["x"]
-                    st.info(f"📅 {sel_d}曜日の詳細")
-                    st.dataframe(df_a[df_a["曜日"].map(day_jp) == sel_d].groupby("項目詳細")["数量"].sum().sort_values(ascending=False), use_container_width=True)
+                    st.info(f"📅 {sel_d}曜日の出荷内訳")
+                    df_day_detail = df_a[df_a["曜日"].map(day_jp) == sel_d]
+                    day_sum = df_day_detail.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
+                    st.dataframe(day_sum, use_container_width=True, hide_index=True)
 
         with tab2:
             st.subheader("📈 トレンド推移")
@@ -158,4 +160,12 @@ if not df_log_raw.empty:
                 st.subheader("💡 推奨在庫 (メイン期間ベース)")
                 safety = df_a.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
                 safety["推奨"] = (safety["mean"] + 2 * safety["std"]).round(0)
-                st.dataframe(safety.sort_values("推奨", ascending=False), use_
+                st.dataframe(safety.sort_values("推奨", ascending=False), use_container_width=True, hide_index=True)
+
+        with tab5:
+            st.subheader("🔢 履歴明細 (分析期間のみ)")
+            st.dataframe(df_a[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
+    else:
+        st.info("選択された期間・条件にデータがありません。")
+else:
+    st.error("データの読み込みに失敗しました。")
