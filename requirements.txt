@@ -4,3 +4,4 @@ st-gsheets-connection
 pandas
 plotly
 schedule
+scikit-learn
