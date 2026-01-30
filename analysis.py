@@ -64,7 +64,7 @@ if not df_log_raw.empty:
         sel_loc = st.selectbox("📍 地名を選択", all_loc_list)
         
         # ⭐ 追加：包装紙フィルタのチェックボックス
-        exclude_wrapping = st.checkbox("🎁 「包装紙」を除外する", value=False)
+        exclude_wrapping = st.checkbox("包装紙を除外する", value=False)
         
         show_compare = st.checkbox("🔄 昨年対比を表示する", value=True)
 
