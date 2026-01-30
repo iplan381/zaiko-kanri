@@ -37,7 +37,7 @@ if not df_log_raw.empty:
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
-    with st.sidebar:
+   with st.sidebar:
         st.markdown("### 🔗 クイック移動")
         c1, c2 = st.columns(2)
         c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
@@ -46,17 +46,25 @@ if not df_log_raw.empty:
     
         st.sidebar.header("🔍 期間設定")
         
+        # 💡 エラー回避：最小・最大の値を安全に取得
         min_d = df_out_all["日時"].min().date()
         max_d = df_out_all["日時"].max().date()
+        
+        # もしデータが1日分しかない場合に備えてガード
+        if min_d >= max_d:
+            min_d = max_d - dt.timedelta(days=1)
 
-        # 📅 メイン期間（期間A）
+        # 📅 メイン期間（期間A）：初期値がmin_dより前にならないように調整
         st.subheader("① 分析期間 (メイン)")
-        range_a = st.date_input("分析したい期間を選択", [max_d - dt.timedelta(days=30), max_d], min_value=min_d, max_value=max_d, key="range_a")
+        start_a = max(min_d, max_d - dt.timedelta(days=30)) # 枠外にはみ出さないようガード
+        range_a = st.date_input("分析したい期間を選択", [start_a, max_d], min_value=min_d, max_value=max_d, key="range_a")
 
-        # 📅 比較期間（期間B）
+        # 📅 比較期間（期間B）：同様に枠内ガード
         st.subheader("② 比較期間 (ターゲット)")
-        range_b = st.date_input("比較したい過去の期間を選択", [max_d - dt.timedelta(days=61), max_d - dt.timedelta(days=31)], min_value=min_d, max_value=max_d, key="range_b")
-
+        start_b = max(min_d, max_d - dt.timedelta(days=61))
+        end_b = max(min_d, max_d - dt.timedelta(days=31))
+        # 比較用なので初期値はメインと被らないように設定
+        range_b = st.date_input("比較したい過去の期間を選択", [start_b, end_b], min_value=min_d, max_value=max_d, key="range_b")
         st.divider()
         st.header("📦 絞り込み")
         all_item = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
