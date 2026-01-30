@@ -3,7 +3,7 @@ import schedule
 import time
 
 # 画面にタイトルを表示
-st.title("スケジュール管理アプリ")
+st.title("エイコースケジュール")
 st.write("アプリは正常に起動しています！")
 
 def job():
