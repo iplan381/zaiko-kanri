@@ -4,7 +4,7 @@ import plotly.express as px
 import requests
 import base64
 from io import StringIO
-import datetime
+import datetime as dt # datetimeをdtとしてインポート
 
 # --- 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri"
@@ -31,11 +31,9 @@ st.title("📈 在庫動態分析")
 if not df_log_raw.empty:
     # --- データ前処理 ---
     df = df_log_raw.copy()
+    # 💡 エラー対策：混合フォーマットに対応
     df["日時"] = pd.to_datetime(df["日時"], errors='coerce', format='mixed')
     df = df.dropna(subset=["日時"])
-    df["年"] = df["日時"].dt.year
-    df["月"] = df["日時"].dt.month
-    df["週"] = df["日時"].dt.isocalendar().week
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
@@ -49,63 +47,51 @@ if not df_log_raw.empty:
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
         st.divider()
     
-    st.sidebar.header("🔍 絞り込み条件")
-    
-    # 【修正ポイント①】商品名・サイズ・地名の選択肢を、期間に関係なく全データから先に作っておく
-    all_item_list = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
-    all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
-    all_loc_list = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
+        st.sidebar.header("🔍 絞り込み条件")
+        
+        # 💡 カレンダーによる期間選択（年・月・週の選択から差し替え）
+        min_d = df_out_all["日時"].min().date()
+        max_d = df_out_all["日時"].max().date()
+        # デフォルトは直近30日間
+        start_default = max(min_d, max_d - dt.timedelta(days=30))
+        date_range = st.date_input("📅 期間を選択", [start_default, max_d], min_value=min_d, max_value=max_d)
 
-    # 年月の選択
-    year_list = sorted(df_out_all["年"].unique(), reverse=True)
-    sel_year = st.sidebar.selectbox("📅 ① 年を選択", year_list)
-    
-    month_options = ["すべて表示"] + [f"{m}月" for m in range(1, 13)]
-    sel_month_str = st.sidebar.selectbox("📆 ② 月を選択", month_options)
+        # 商品名・サイズ・地名の選択肢
+        all_item_list = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
+        all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
+        all_loc_list = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
 
-    # 週の選択（ここは選択された月に依存するため動的に作成）
-    df_temp_month = df_out_all[(df_out_all["年"] == sel_year)]
-    sel_week_str = "すべて表示"
-    if sel_month_str != "すべて表示":
-        m_int = int(sel_month_str.replace("月", ""))
-        df_temp_month = df_temp_month[df_temp_month["月"] == m_int]
-        available_weeks = sorted(df_temp_month["週"].unique())
-        week_options = ["すべて表示"] + [f"第{w}週" for w in available_weeks]
-        sel_week_str = st.sidebar.selectbox("📅 ③ 週を選択", week_options)
-
-    st.sidebar.divider()
-    
-    # 【修正ポイント②】選択肢が固定（all_...）されるため、年月を変えてもリセットされなくなる
-    sel_item = st.sidebar.selectbox("📦 ④ 商品名を選択", all_item_list)
-    sel_size = st.sidebar.selectbox("📏 ⑤ サイズを選択", all_size_list)
-    sel_loc = st.sidebar.selectbox("📍 ⑥ 地名を選択", all_loc_list)
-
-    show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
+        sel_item = st.sidebar.selectbox("📦 商品名を選択", all_item_list)
+        sel_size = st.sidebar.selectbox("📏 サイズを選択", all_size_list)
+        sel_loc = st.sidebar.selectbox("📍 地名を選択", all_loc_list)
+        show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
 
     # --- 最終的なフィルタリング実行 ---
-    # 期間フィルタ
-    df_final = df_out_all[df_out_all["年"] == sel_year]
-    if sel_month_str != "すべて表示":
-        df_final = df_final[df_final["月"] == int(sel_month_str.replace("月", ""))]
-        if sel_week_str != "すべて表示":
-            df_final = df_final[df_final["週"] == int(sel_week_str.replace("第", "").replace("週", ""))]
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+        start_date, end_date = date_range
+        # 期間フィルタ
+        df_final = df_out_all[(df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)]
+        # 昨年対比用フィルタ
+        ls, le = start_date - dt.timedelta(days=365), end_date - dt.timedelta(days=365)
+        df_last = df_out_all[(df_out_all["日時"].dt.date >= ls) & (df_out_all["日時"].dt.date <= le)]
+    else:
+        st.info("カレンダーで開始日と終了日を選択してください。")
+        st.stop()
 
     # 商品・サイズ・地名フィルタ
-    if sel_item != "すべて表示": df_final = df_final[df_final["商品名"] == sel_item]
-    if sel_size != "すべて表示": df_final = df_final[df_final["サイズ"] == sel_size]
-    if sel_loc != "すべて表示": df_final = df_final[df_final["地名"] == sel_loc]
-
-    # 昨年対比用フィルタ
-    df_last = df_out_all[df_out_all["年"] == (sel_year - 1)]
-    if sel_month_str != "すべて表示":
-        df_last = df_last[df_last["月"] == int(sel_month_str.replace("月", ""))]
-    if sel_item != "すべて表示": df_last = df_last[df_last["商品名"] == sel_item]
-    if sel_size != "すべて表示": df_last = df_last[df_last["サイズ"] == sel_size]
-    if sel_loc != "すべて表示": df_last = df_last[df_last["地名"] == sel_loc]
+    if sel_item != "すべて表示":
+        df_final = df_final[df_final["商品名"] == sel_item]
+        df_last = df_last[df_last["商品名"] == sel_item]
+    if sel_size != "すべて表示":
+        df_final = df_final[df_final["サイズ"] == sel_size]
+        df_last = df_last[df_last["サイズ"] == sel_size]
+    if sel_loc != "すべて表示":
+        df_final = df_final[df_final["地名"] == sel_loc]
+        df_last = df_last[df_last["地名"] == sel_loc]
 
     st.divider()
 
-    # --- 以下、表示ロジック（前回のまま） ---
+    # --- 表示ロジック（提示されたコードのまま） ---
     if not df_final.empty:
         qty_this = df_final["数量"].sum()
         qty_last = df_last["数量"].sum()
