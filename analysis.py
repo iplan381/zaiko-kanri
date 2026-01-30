@@ -29,7 +29,7 @@ df_log_raw = get_github_data(FILE_PATH_LOG)
 st.title("📈 在庫動態分析")
 
 if not df_log_raw.empty:
-    # --- データ前処理（エラー対策のみ実施） ---
+    # --- データ前処理（エラー対策：format='mixed'を追加） ---
     df = df_log_raw.copy()
     df["日時"] = pd.to_datetime(df["日時"], errors='coerce', format='mixed')
     df = df.dropna(subset=["日時"])
@@ -46,29 +46,35 @@ if not df_log_raw.empty:
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
         st.divider()
 
-        st.sidebar.header("🔍 絞り込み条件")
+        st.header("🔍 絞り込み条件")
         
-        # カレンダー選択への差し替え
-        min_d = df_out_all["日時"].min().date()
-        max_d = df_out_all["日時"].max().date()
-        date_range = st.date_input("📅 期間を選択", [max_d - dt.timedelta(days=30), max_d], min_value=min_d, max_value=max_d)
+        # 💡 エラー修正：データが空でないことを確認してから日付を取得
+        if not df_out_all.empty:
+            min_d = df_out_all["日時"].min().date()
+            max_d = df_out_all["日時"].max().date()
+            # 範囲が不正にならないようガード
+            start_val = max(min_d, max_d - dt.timedelta(days=30))
+            date_range = st.date_input("📅 期間を選択", [start_val, max_d], min_value=min_d, max_value=max_d)
+        else:
+            st.warning("分析可能な出庫データがありません。")
+            st.stop()
 
         all_item_list = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
         all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
         all_loc_list = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
 
-        sel_item = st.sidebar.selectbox("📦 商品名を選択", all_item_list)
-        sel_size = st.sidebar.selectbox("📏 サイズを選択", all_size_list)
-        sel_loc = st.sidebar.selectbox("📍 地名を選択", all_loc_list)
-        show_compare = st.sidebar.checkbox("🔄 昨年対比を表示する", value=True)
+        sel_item = st.selectbox("📦 商品名を選択", all_item_list)
+        sel_size = st.selectbox("📏 サイズを選択", all_size_list)
+        sel_loc = st.selectbox("📍 地名を選択", all_loc_list)
+        show_compare = st.checkbox("🔄 昨年対比を表示する", value=True)
 
-    # 期間確定ロジック
+    # 期間確定ロジック（型エラー防止版）
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         start_date, end_date = date_range
         df_final = df_out_all[(df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)]
-        # 昨年対比用
-        l_s, l_e = start_date - dt.timedelta(days=365), end_date - dt.timedelta(days=365)
-        df_last = df_out_all[(df_out_all["日時"].dt.date >= l_s) & (df_out_all["日時"].dt.date <= l_e)]
+        # 昨年対比
+        ls, le = start_date - dt.timedelta(days=365), end_date - dt.timedelta(days=365)
+        df_last = df_out_all[(df_out_all["日時"].dt.date >= ls) & (df_out_all["日時"].dt.date <= le)]
     else:
         st.info("カレンダーで開始日と終了日を選択してください。")
         st.stop()
@@ -86,10 +92,9 @@ if not df_log_raw.empty:
 
     st.divider()
 
-    # --- 表示ロジック（元のコードを復元） ---
+    # --- 📊 表示ロジック（完全に元のまま） ---
     if not df_final.empty:
-        qty_this = df_final["数量"].sum()
-        qty_last = df_last["数量"].sum()
+        qty_this, qty_last = df_final["数量"].sum(), df_last["数量"].sum()
         
         if show_compare:
             k1, k2, k3, k4 = st.columns(4)
@@ -154,6 +159,4 @@ if not df_log_raw.empty:
             st.subheader("🔢 履歴明細")
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
     else:
-        st.info("選択された条件に該当するデータがありません。")
-else:
-    st.error("データの読み込みに失敗しました。")
+        st.info("選択された条件に該当するデータ
