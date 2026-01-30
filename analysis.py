@@ -68,13 +68,19 @@ if not df_log_raw.empty:
         show_compare = st.checkbox("🔄 昨年対比を表示する", value=True)
 
     # 期間確定ロジック
-    if isinstance(date_range, list) and len(date_range) == 2:
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         start_date, end_date = date_range
-        df_final = df_out_all[(df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)]
+        # データの「日時」を日付型(.date)に変換して比較するぜ
+        mask = (df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)
+        df_final = df_out_all.loc[mask]
+        
+        # 昨年対比用（1年前）
         last_start, last_end = start_date - dt.timedelta(days=365), end_date - dt.timedelta(days=365)
-        df_last = df_out_all[(df_out_all["日時"].dt.date >= last_start) & (df_out_all["日時"].dt.date <= last_end)]
+        mask_last = (df_out_all["日時"].dt.date >= last_start) & (df_out_all["日時"].dt.date <= last_end)
+        df_last = df_out_all.loc[mask_last]
     else:
-        st.info("カレンダーで開始日と終了日を選択してください。")
+        # 終了日を選択中のときは、とりあえず開始日だけで表示するか、案内を出す
+        st.info("カレンダーで「開始日」と「終了日」の2箇所を選択してください。")
         st.stop()
 
     # フィルタ適用
