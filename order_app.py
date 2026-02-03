@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import io
 
 # --- 1. 設定 ---
@@ -11,6 +11,7 @@ FILE_PATH_ORDERS = "order_log.csv"
 FILE_PATH_MASTER = "material_master.csv"
 FILE_PATH_VENDOR = "vendor_master.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+def get_now_jst():return datetime.now(timezone(timedelta(hours=9)))
 
 # --- 2. GitHub連携関数 ---
 def get_github_data(file_path, default_cols):
@@ -75,7 +76,7 @@ with st.sidebar:
         c_prod = st.selectbox("3. 商品名", prods)
         if st.button("依頼を送信", type="primary", use_container_width=True):
             new_id = int(df_orders['id'].max() + 1) if not df_orders.empty else 1
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            now = get_now_jst().strftime("%Y-%m-%d %H:%M")
             new_row = pd.DataFrame([{"id": new_id, "category": c_cat, "item_name": c_item, "product_name": c_prod, "request_date": now, "status": "未対応"}])
             df_updated = pd.concat([df_orders, new_row], ignore_index=True)
             if update_github_data(FILE_PATH_ORDERS, df_updated, sha_orders, "New Request") in [200, 201]:
@@ -155,7 +156,7 @@ if not pending_df.empty:
             if st.form_submit_button("✅ チェックした項目を発注済みにする", use_container_width=True):
                 for oid, v in payload.items():
                     idx = df_orders[df_orders['id'] == oid].index[0]
-                    df_orders.loc[idx, ["quantity","vendor","delivery_date","status","order_date"]] = [v['qty'], v['vendor'], str(v['date']), "発注済み", datetime.now().strftime("%Y-%m-%d")]
+                    df_orders.loc[idx, ["quantity","vendor","delivery_date","status","order_date"]] = [v['qty'], v['vendor'], str(v['date']), "発注済み", get_now_jst().strftime("%Y-%m-%d")]
                 update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Ordered")
                 st.rerun()
 else:
