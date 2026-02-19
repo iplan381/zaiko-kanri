@@ -345,7 +345,7 @@ if not df_log.empty:
         df_log_filtered = df_log_filtered[df_log_filtered["区分"].isin(selected_types)]
 
     # 3. 履歴の表示
-    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
+    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "取引先", "区分", "数量", "在庫数", "担当者"]
     st.dataframe(
         df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
         use_container_width=True, hide_index=True,
