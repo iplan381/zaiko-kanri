@@ -108,28 +108,24 @@ if not df_log_raw.empty:
     st.divider()
 
     # --- 表示ロジック ---
-     if not df_final.empty:
-        # 1. 基礎データの計算（商品・サイズごとに入り数を掛けてバラ数を出す）
+    if not df_final.empty:
+        # 基礎データの計算
         df_sum_this = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
         df_m_calc = pd.merge(df_sum_this, df_master, on=["商品名", "サイズ"], how="left")
         df_m_calc["入り数"] = pd.to_numeric(df_m_calc["入り数"], errors='coerce').fillna(1).astype(int)
         
         # 単位の整理
-        total_cases_this = df_m_calc["数量"].sum()              # ケース数合計
-        total_pcs_this = (df_m_calc["数量"] * df_m_calc["入り数"]).sum()  # バラ数合計（ケース×入り数）
-
-        # 前年実績（比較用）
-        qty_last = df_last["数量"].sum() # 前年ケース数
+        total_cases_this = df_m_calc["数量"].sum()
+        total_pcs_this = (df_m_calc["数量"] * df_m_calc["入り数"]).sum()
+        qty_last = df_last["数量"].sum()
         
-        # カラム表示（5列または4列）
+        # カラム表示
         cols = st.columns(5) if show_compare else st.columns(4)
         
-        # メトリクス表示
         with cols[0]: st.metric("期間内 合計出荷(バラ)", f"{int(total_pcs_this):,}")
         with cols[1]: st.metric("期間内 合計ケース数", f"{int(total_cases_this):,} cs")
         
         if show_compare:
-            # 比較はケース数ベース
             diff_pct = f"{round(((total_cases_this - qty_last) / qty_last) * 100, 1)}%" if qty_last > 0 else "---"
             with cols[2]: st.metric("前年同期実績(cs)", f"{int(qty_last):,}")
             with cols[3]: st.metric("前年同期比", diff_pct)
@@ -180,9 +176,9 @@ if not df_log_raw.empty:
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "出荷ケース数": st.column_config.NumberColumn("合計ケース数", format="%d"),
-                    "入り数": st.column_config.NumberColumn("入数"),
-                    "合計バラ数": st.column_config.NumberColumn("合計箱数", format="%d")
+                    "出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"),
+                    "入り数": st.column_config.NumberColumn("入数/cs"),
+                    "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")
                 }
             )
 
