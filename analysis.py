@@ -74,7 +74,6 @@ if not df_log_raw.empty:
         start_default = max(min_d, max_d - dt.timedelta(days=30))
         date_range = st.date_input("📅 期間を選択", [start_default, max_d], min_value=min_d, max_value=max_d)
 
-        # 商品名・サイズ・地名の選択肢
         all_item_list = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
         all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
         all_loc_list = ["すべて表示"] + sorted(df_out_all["地名"].unique().tolist())
@@ -83,35 +82,25 @@ if not df_log_raw.empty:
         sel_size = st.selectbox("📏 サイズを選択", all_size_list)
         sel_loc = st.selectbox("📍 地名を選択", all_loc_list)
         
-        # ⭐ 追加：包装紙フィルタのチェックボックス
         exclude_wrapping = st.checkbox("包装紙を除外する", value=False)
-        
         show_compare = st.checkbox("昨年対比を表示する", value=True)
 
     # --- 最終的なフィルタリング実行 ---
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         start_date, end_date = date_range
         df_final = df_out_all[(df_out_all["日時"].dt.date >= start_date) & (df_out_all["日時"].dt.date <= end_date)].copy()
-        
-        # 昨年対比用
         ls, le = start_date - dt.timedelta(days=365), end_date - dt.timedelta(days=365)
         df_last = df_out_all[(df_out_all["日時"].dt.date >= ls) & (df_out_all["日時"].dt.date <= le)].copy()
     else:
         st.info("カレンダーで開始日と終了日を選択してください。")
         st.stop()
 
-    # 共通フィルタ（商品・サイズ・地名）
     if sel_item != "すべて表示":
-        df_final = df_final[df_final["商品名"] == sel_item]
-        df_last = df_last[df_last["商品名"] == sel_item]
+        df_final, df_last = df_final[df_final["商品名"] == sel_item], df_last[df_last["商品名"] == sel_item]
     if sel_size != "すべて表示":
-        df_final = df_final[df_final["サイズ"] == sel_size]
-        df_last = df_last[df_last["サイズ"] == sel_size]
+        df_final, df_last = df_final[df_final["サイズ"] == sel_size], df_last[df_last["サイズ"] == sel_size]
     if sel_loc != "すべて表示":
-        df_final = df_final[df_final["地名"] == sel_loc]
-        df_last = df_last[df_last["地名"] == sel_loc]
-
-    # ⭐ 追加：包装紙除外ロジック
+        df_final, df_last = df_final[df_final["地名"] == sel_loc], df_last[df_last["地名"] == sel_loc]
     if exclude_wrapping:
         df_final = df_final[~df_final["地名"].str.contains("包装紙", na=False)]
         df_last = df_last[~df_last["地名"].str.contains("包装紙", na=False)]
@@ -120,23 +109,31 @@ if not df_log_raw.empty:
 
     # --- 表示ロジック ---
     if not df_final.empty:
+        # メトリクス用の計算
         qty_this = df_final["数量"].sum()
         qty_last = df_last["数量"].sum()
         
+        # 箱数の計算ロジック
+        df_sum_this = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
+        df_m_calc = pd.merge(df_sum_this, df_master, on=["商品名", "サイズ"], how="left")
+        df_m_calc["入り数"] = pd.to_numeric(df_m_calc["入り数"], errors='coerce').fillna(1).replace(0, 1)
+        total_cases = (df_m_calc["数量"] / df_m_calc["入り数"]).sum()
+        
+        # カラム表示
+        cols = st.columns(5) if show_compare else st.columns(4)
+        
+        with cols[0]: st.metric("期間内 合計出荷(バラ)", f"{int(qty_this):,}")
+        with cols[1]: st.metric("期間内 合計箱数", f"{round(total_cases, 1)} cs")
+        
         if show_compare:
-            k1, k2, k3, k4 = st.columns(4)
             diff_pct = f"{round(((qty_this - qty_last) / qty_last) * 100, 1)}%" if qty_last > 0 else "---"
-            with k1: st.metric("期間内 合計出荷", f"{int(qty_this):,}")
-            with k2: st.metric("前年同期実績", f"{int(qty_last):,}")
-            with k3: st.metric("前年同期比", diff_pct)
-            with k4: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
+            with cols[2]: st.metric("前年同期実績", f"{int(qty_last):,}")
+            with cols[3]: st.metric("前年同期比", diff_pct)
+            with cols[4]: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
         else:
-            k1, k2, k3 = st.columns(3)
-            with k1: st.metric("期間内 合計出荷", f"{int(qty_this):,}")
-            with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
-            with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
+            with cols[2]: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
+            with cols[3]: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
-        # タブ定義（トレンド推移を商品別出荷集計に変更、マスタ設定を追加）
         tab1, tab2, tab4, tab5, tab_m = st.tabs(["📊 傾向", "📦 商品別出荷集計", "⚠️ 不動・安全在庫", "🔢 履歴明細", "⚙️ マスタ設定"])
 
         with tab1:
@@ -169,11 +166,8 @@ if not df_log_raw.empty:
 
         with tab2:
             st.subheader("📦 指定期間の出荷合計（入り数換算）")
-            # 地名を分けないで商品名とサイズで集計
-            summary = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index().rename(columns={"数量": "出荷ケース数"})
-            
-            # マスタデータの入り数を結合
-            df_merged = pd.merge(summary, df_master, on=["商品名", "サイズ"], how="left")
+            summary_prod = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index().rename(columns={"数量": "出荷ケース数"})
+            df_merged = pd.merge(summary_prod, df_master, on=["商品名", "サイズ"], how="left")
             df_merged["入り数"] = pd.to_numeric(df_merged["入り数"], errors='coerce').fillna(1).astype(int)
             df_merged["合計バラ数"] = df_merged["出荷ケース数"] * df_merged["入り数"]
             
@@ -196,9 +190,7 @@ if not df_log_raw.empty:
                 if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
                 if sel_loc != "すべて表示": df_db = df_db[df_db["地名"] == sel_loc]
-                if exclude_wrapping:
-                    df_db = df_db[~df_db["地名"].str.contains("包装紙", na=False)]
-                
+                if exclude_wrapping: df_db = df_db[~df_db["地名"].str.contains("包装紙", na=False)]
                 now = pd.Timestamp.now()
                 dead = df_db.groupby("項目詳細")["日時"].max().reset_index()
                 dead = dead.rename(columns={"日時": "最終出荷日"})
@@ -219,28 +211,19 @@ if not df_log_raw.empty:
 
         with tab_m:
             st.subheader("⚙️ 入り数マスタの編集")
-            st.info("商品の入り数を登録してください。未登録の商品は「1」として計算されます。")
-            
-            # 現在のログにある商品・サイズ一覧を取得
             current_items = df_out_all[["商品名", "サイズ"]].drop_duplicates()
-            # マスタとマージして編集用データ作成
             df_editor = pd.merge(current_items, df_master, on=["商品名", "サイズ"], how="left")
             df_editor["入り数"] = df_editor["入り数"].fillna(1)
-            
-            # データエディタ
             edited_df = st.data_editor(df_editor, use_container_width=True, hide_index=True, num_rows="dynamic")
-            
             if st.button("マスタをGitHubに保存する"):
                 with st.spinner("保存中..."):
                     edited_df["入り数"] = pd.to_numeric(edited_df["入り数"], errors='coerce').fillna(1).astype(int)
-                    status = save_master_to_github(edited_df)
-                    if status in [200, 201]:
+                    if save_master_to_github(edited_df) in [200, 201]:
                         st.success("マスタをGitHubに保存したよ！")
                         st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.error(f"保存に失敗したみたい。ステータスコード: {status}")
-
+                        st.error("保存に失敗しました。")
     else:
         st.info("選択された条件に該当するデータがありません。")
 else:
