@@ -9,6 +9,7 @@ import datetime as dt
 # --- 設定 ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_LOG = "stock_log_main.csv"
+FILE_PATH_MASTER = "item_master.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 st.set_page_config(page_title="出庫分析", layout="wide")
@@ -24,7 +25,26 @@ def get_github_data(file_path):
         return pd.read_csv(StringIO(csv_text)).fillna("")
     return pd.DataFrame()
 
+# GitHub保存用関数（マスタ用）
+def save_master_to_github(df_to_save):
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH_MASTER}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    res = requests.get(url, headers=headers)
+    sha = res.json().get("sha") if res.status_code == 200 else None
+    
+    content = base64.b64encode(df_to_save.to_csv(index=False).encode("utf-8")).decode("utf-8")
+    data = {"message": "Update master data", "content": content}
+    if sha:
+        data["sha"] = sha
+    res_put = requests.put(url, headers=headers, json=data)
+    return res_put.status_code
+
 df_log_raw = get_github_data(FILE_PATH_LOG)
+df_master = get_github_data(FILE_PATH_MASTER)
+
+# マスタが空（ファイルなし）の場合の初期化
+if df_master.empty:
+    df_master = pd.DataFrame(columns=["商品名", "サイズ", "入り数"])
 
 st.title("📈 在庫動態分析")
 
@@ -42,7 +62,7 @@ if not df_log_raw.empty:
     with st.sidebar:
         st.markdown("### 🔗 クイック移動")
         c1, c2 = st.columns(2)
-        c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
+        c1.link_button("📦 在庫管理", "https://zaiko-kanri.app/")
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
         st.divider()
     
@@ -91,7 +111,7 @@ if not df_log_raw.empty:
         df_final = df_final[df_final["地名"] == sel_loc]
         df_last = df_last[df_last["地名"] == sel_loc]
 
-    # ⭐ 追加：包装紙除外ロジック（地名に「包装紙」が含まれる行を消す）
+    # ⭐ 追加：包装紙除外ロジック
     if exclude_wrapping:
         df_final = df_final[~df_final["地名"].str.contains("包装紙", na=False)]
         df_last = df_last[~df_last["地名"].str.contains("包装紙", na=False)]
@@ -116,7 +136,8 @@ if not df_log_raw.empty:
             with k2: st.metric("稼働詳細項目数", f"{df_final['項目詳細'].nunique()}")
             with k3: st.metric("平均出荷量", f"{round(df_final['数量'].mean(), 1)}")
 
-        tab1, tab2, tab4, tab5 = st.tabs(["📊 傾向", "📈 トレンド推移", "⚠️ 不動・安全在庫", "🔢 履歴明細"])
+        # タブ定義（トレンド推移を商品別出荷集計に変更、マスタ設定を追加）
+        tab1, tab2, tab4, tab5, tab_m = st.tabs(["📊 傾向", "📦 商品別出荷集計", "⚠️ 不動・安全在庫", "🔢 履歴明細", "⚙️ マスタ設定"])
 
         with tab1:
             st.subheader("📦 詳細項目別ランキング（上位20件）")
@@ -147,9 +168,25 @@ if not df_log_raw.empty:
                     st.dataframe(day_summary, use_container_width=True, hide_index=True)
 
         with tab2:
-            st.subheader("📈 トレンド推移")
-            df_trend = df_final.groupby(df_final["日時"].dt.date)["数量"].sum().reset_index()
-            st.plotly_chart(px.line(df_trend, x="日時", y="数量", markers=True), use_container_width=True)
+            st.subheader("📦 指定期間の出荷合計（入り数換算）")
+            # 地名を分けないで商品名とサイズで集計
+            summary = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index().rename(columns={"数量": "出荷ケース数"})
+            
+            # マスタデータの入り数を結合
+            df_merged = pd.merge(summary, df_master, on=["商品名", "サイズ"], how="left")
+            df_merged["入り数"] = pd.to_numeric(df_merged["入り数"], errors='coerce').fillna(1).astype(int)
+            df_merged["合計バラ数"] = df_merged["出荷ケース数"] * df_merged["入り数"]
+            
+            st.dataframe(
+                df_merged.sort_values("合計バラ数", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"),
+                    "入り数": st.column_config.NumberColumn("入数/cs"),
+                    "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")
+                }
+            )
 
         with tab4:
             col_w1, col_w2 = st.columns(2)
@@ -159,7 +196,6 @@ if not df_log_raw.empty:
                 if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
                 if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
                 if sel_loc != "すべて表示": df_db = df_db[df_db["地名"] == sel_loc]
-                # ここも不動在庫判定で包装紙を除外したい場合は以下を有効化
                 if exclude_wrapping:
                     df_db = df_db[~df_db["地名"].str.contains("包装紙", na=False)]
                 
@@ -180,6 +216,31 @@ if not df_log_raw.empty:
         with tab5:
             st.subheader("🔢 履歴明細")
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
+
+        with tab_m:
+            st.subheader("⚙️ 入り数マスタの編集")
+            st.info("商品の入り数を登録してください。未登録の商品は「1」として計算されます。")
+            
+            # 現在のログにある商品・サイズ一覧を取得
+            current_items = df_out_all[["商品名", "サイズ"]].drop_duplicates()
+            # マスタとマージして編集用データ作成
+            df_editor = pd.merge(current_items, df_master, on=["商品名", "サイズ"], how="left")
+            df_editor["入り数"] = df_editor["入り数"].fillna(1)
+            
+            # データエディタ
+            edited_df = st.data_editor(df_editor, use_container_width=True, hide_index=True, num_rows="dynamic")
+            
+            if st.button("マスタをGitHubに保存する"):
+                with st.spinner("保存中..."):
+                    edited_df["入り数"] = pd.to_numeric(edited_df["入り数"], errors='coerce').fillna(1).astype(int)
+                    status = save_master_to_github(edited_df)
+                    if status in [200, 201]:
+                        st.success("マスタをGitHubに保存したよ！")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"保存に失敗したみたい。ステータスコード: {status}")
+
     else:
         st.info("選択された条件に該当するデータがありません。")
 else:
