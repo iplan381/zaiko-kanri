@@ -37,15 +37,17 @@ def save_master_to_github(df_to_save):
     res_put = requests.put(url, headers=headers, json=data)
     return res_put.status_code
 
+# データの読み込み
 df_log_raw = get_github_data(FILE_PATH_LOG)
 df_master = get_github_data(FILE_PATH_MASTER)
 
 if df_master.empty:
     df_master = pd.DataFrame(columns=["商品名", "サイズ", "入り数"])
 
+# --- メイン画面表示 ---
 st.title("📈 在庫動態分析")
 
-# ⭐ メイン画面に見やすく配置
+# ⭐ ここにチェックボックスを配置（サイドバーの外）
 include_reserve = st.checkbox("📅 予約出庫も含めて分析する (オフの場合は確定出庫のみ)", value=False)
 
 if not df_log_raw.empty:
@@ -54,10 +56,12 @@ if not df_log_raw.empty:
     df = df.dropna(subset=["日時"])
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
-    # 区分フィルタリング
+    # ⭐ 区分フィルタリングの実行
     if include_reserve:
+        # 「出庫」または「予約出庫」を含む
         df_out_all = df[df["区分"].str.contains("出庫|予約出庫", na=False)].copy()
     else:
+        # 「出庫」のみ（「予約」という文字が入っているものは除外）
         df_out_all = df[df["区分"].str.contains("出庫", na=False) & ~df["区分"].str.contains("予約", na=False)].copy()
 
     df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
@@ -109,7 +113,7 @@ if not df_log_raw.empty:
 
     st.divider()
 
-    # --- 表示ロジック ---
+    # --- 数値表示（メトリクス） ---
     if not df_final.empty:
         df_sum_this = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
         df_m_calc = pd.merge(df_sum_this, df_master, on=["商品名", "サイズ"], how="left")
@@ -180,6 +184,7 @@ if not df_log_raw.empty:
 
         with tab5:
             st.subheader("🔢 履歴明細")
+            # 区分を表示に追加して予約か確定か分かるようにしたよ
             st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量", "区分"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
 
         with tab_m:
