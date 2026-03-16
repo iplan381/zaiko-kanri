@@ -45,12 +45,23 @@ if df_master.empty:
 
 st.title("📈 在庫動態分析")
 
+# ⭐ メイン画面に見やすく配置
+include_reserve = st.checkbox("📅 予約出庫も含めて分析する (オフの場合は確定出庫のみ)", value=False)
+
 if not df_log_raw.empty:
     df = df_log_raw.copy()
     df["日時"] = pd.to_datetime(df["日時"], errors='coerce', format='mixed')
     df = df.dropna(subset=["日時"])
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
+    # 区分フィルタリング
+    if include_reserve:
+        df_out_all = df[df["区分"].str.contains("出庫|予約出庫", na=False)].copy()
+    else:
+        df_out_all = df[df["区分"].str.contains("出庫", na=False) & ~df["区分"].str.contains("予約", na=False)].copy()
+
+    df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
+
     # --- 🔍 絞り込み条件（サイドバー） ---
     with st.sidebar:
         st.markdown("### 🔗 クイック移動")
@@ -60,25 +71,10 @@ if not df_log_raw.empty:
         st.divider()
     
         st.sidebar.header("🔍 絞り込み条件")
-        
-        # 期間選択
         min_d = df["日時"].min().date()
         max_d = df["日時"].max().date()
         start_default = max(min_d, max_d - dt.timedelta(days=30))
         date_range = st.date_input("📅 期間を選択", [start_default, max_d], min_value=min_d, max_value=max_d)
-
-        # ⭐ 追加：予約出庫を含めるかのチェックボックス
-        include_reserve = st.checkbox("予約出庫も含める", value=False)
-        
-        # データ抽出条件の決定
-        if include_reserve:
-            # 「出庫」または「予約出庫」を含む
-            df_out_all = df[df["区分"].str.contains("出庫|予約出庫", na=False)].copy()
-        else:
-            # 「出庫」のみ（予約出庫は除外）
-            df_out_all = df[df["区分"].str.contains("出庫", na=False) & ~df["区分"].str.contains("予約", na=False)].copy()
-
-        df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
         all_item_list = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
         all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
@@ -150,21 +146,13 @@ if not df_log_raw.empty:
                 st.subheader("📍 地名別")
                 st.plotly_chart(px.pie(df_final, values='数量', names='地名', hole=0.4), use_container_width=True)
             with c2:
-                st.subheader("📅 曜日別傾向 (クリックで内訳)")
+                st.subheader("📅 曜日別傾向")
                 df_final["曜日"] = df_final["日時"].dt.day_name()
                 day_jp = {'Monday':'月','Tuesday':'火','Wednesday':'水','Thursday':'木','Friday':'金','Saturday':'土','Sunday':'日'}
                 summary_day = df_final.groupby("曜日")["数量"].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']).reset_index()
                 summary_day["表示曜日"] = summary_day["曜日"].map(day_jp)
-                fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color="数量", color_continuous_scale=px.colors.sequential.Blues, custom_data=["表示曜日"])
-                fig_day.update_layout(coloraxis_showscale=False, clickmode='event+select')
-                selected_points = st.plotly_chart(fig_day, use_container_width=True, on_select="rerun")
-                
-                if selected_points and "selection" in selected_points and selected_points["selection"]["points"]:
-                    selected_day = selected_points["selection"]["points"][0]["x"]
-                    st.info(f"📅 {selected_day}曜日の出荷内訳")
-                    df_day_detail = df_final[df_final["曜日"].map(day_jp) == selected_day]
-                    day_summary = df_day_detail.groupby("項目詳細")["数量"].sum().sort_values(ascending=False).reset_index()
-                    st.dataframe(day_summary, use_container_width=True, hide_index=True)
+                fig_day = px.bar(summary_day, x="表示曜日", y="数量", text_auto=True, color="数量", color_continuous_scale=px.colors.sequential.Blues)
+                st.plotly_chart(fig_day, use_container_width=True)
 
         with tab2:
             st.subheader("📦 指定期間の出荷合計（入り数換算）")
@@ -172,25 +160,18 @@ if not df_log_raw.empty:
             df_merged = pd.merge(summary_prod, df_master, on=["商品名", "サイズ"], how="left")
             df_merged["入り数"] = pd.to_numeric(df_merged["入り数"], errors='coerce').fillna(1).astype(int)
             df_merged["合計バラ数"] = df_merged["出荷ケース数"] * df_merged["入り数"]
-            st.dataframe(df_merged.sort_values("合計バラ数", ascending=False), use_container_width=True, hide_index=True, column_config={"出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"), "入り数": st.column_config.NumberColumn("入数/cs"), "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")})
+            st.dataframe(df_merged.sort_values("合計バラ数", ascending=False), use_container_width=True, hide_index=True)
 
         with tab4:
             col_w1, col_w2 = st.columns(2)
             with col_w1:
                 st.subheader("⚠️ 不動在庫")
                 df_db = df_out_all.copy()
-                if sel_item != "すべて表示": df_db = df_db[df_db["商品名"] == sel_item]
-                if sel_size != "すべて表示": df_db = df_db[df_db["サイズ"] == sel_size]
-                if sel_loc != "すべて表示": df_db = df_db[df_db["地名"] == sel_loc]
-                if exclude_wrapping: df_db = df_db[~df_db["地名"].str.contains("包装紙", na=False)]
                 now = pd.Timestamp.now()
                 dead = df_db.groupby("項目詳細")["日時"].max().reset_index()
                 dead = dead.rename(columns={"日時": "最終出荷日"})
                 dead["経過日数"] = (now - dead["最終出荷日"]).dt.days
-                dead.loc[dead["経過日数"] < 0, "経過日数"] = 0
-                dead = dead.sort_values("経過日数", ascending=False)
-                dead["最終出荷日"] = dead["最終出荷日"].dt.strftime('%Y-%m-%d')
-                st.dataframe(dead, use_container_width=True, hide_index=True)
+                st.dataframe(dead.sort_values("経過日数", ascending=False), use_container_width=True, hide_index=True)
             with col_w2:
                 st.subheader("💡 推奨・安全在庫")
                 safety_df = df_final.groupby("項目詳細")["数量"].agg(['mean', 'std']).reset_index().fillna(0)
@@ -199,23 +180,19 @@ if not df_log_raw.empty:
 
         with tab5:
             st.subheader("🔢 履歴明細")
-            st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
+            st.dataframe(df_final[["日時", "商品名", "サイズ", "地名", "数量", "区分"]].sort_values("日時", ascending=False), use_container_width=True, hide_index=True)
 
         with tab_m:
             st.subheader("⚙️ 入り数マスタの編集")
             current_items = df_out_all[["商品名", "サイズ"]].drop_duplicates()
             df_editor = pd.merge(current_items, df_master, on=["商品名", "サイズ"], how="left")
             df_editor["入り数"] = df_editor["入り数"].fillna(1)
-            edited_df = st.data_editor(df_editor, use_container_width=True, hide_index=True, num_rows="dynamic")
+            edited_df = st.data_editor(df_editor, use_container_width=True, hide_index=True)
             if st.button("マスタをGitHubに保存する"):
-                with st.spinner("保存中..."):
-                    edited_df["入り数"] = pd.to_numeric(edited_df["入り数"], errors='coerce').fillna(1).astype(int)
-                    if save_master_to_github(edited_df) in [200, 201]:
-                        st.success("マスタをGitHubに保存したよ！")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("保存に失敗しました。")
+                save_master_to_github(edited_df)
+                st.success("保存したよ！")
+                st.cache_data.clear()
+                st.rerun()
     else:
         st.info("選択された条件に該当するデータがありません。")
 else:
