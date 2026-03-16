@@ -121,9 +121,9 @@ if not df_log_raw.empty:
         
         # カラム表示
         cols = st.columns(5) if show_compare else st.columns(4)
-        
-        with cols[0]: st.metric("期間内 合計箱数", f"{int(qty_this)} 箱")
-        with cols[1]: st.metric("期間内 合計ケース数", f"{round(total_cases)} cs")
+
+        with cols[0]: st.metric("期間内 合計ケース数", f"{round(total_cases)} cs")
+        with cols[1]: st.metric("期間内 合計箱数", f"{int(qty_this)} 箱")
         
         if show_compare:
             diff_pct = f"{round(((qty_this - qty_last) / qty_last) * 100, 1)}%" if qty_last > 0 else "---"
@@ -176,9 +176,9 @@ if not df_log_raw.empty:
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"),
+                    "出荷ケース数": st.column_config.NumberColumn("合計ケース数", format="%d cs"),
                     "入り数": st.column_config.NumberColumn("入数/cs"),
-                    "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")
+                    "合計バラ数": st.column_config.NumberColumn("合計箱数", format="%d 箱")
                 }
             )
 
