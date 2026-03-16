@@ -25,13 +25,11 @@ def get_github_data(file_path):
         return pd.read_csv(StringIO(csv_text)).fillna("")
     return pd.DataFrame()
 
-# GitHub保存用関数（マスタ用）
 def save_master_to_github(df_to_save):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH_MASTER}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
     sha = res.json().get("sha") if res.status_code == 200 else None
-    
     content = base64.b64encode(df_to_save.to_csv(index=False).encode("utf-8")).decode("utf-8")
     data = {"message": "Update master data", "content": content}
     if sha:
@@ -42,22 +40,17 @@ def save_master_to_github(df_to_save):
 df_log_raw = get_github_data(FILE_PATH_LOG)
 df_master = get_github_data(FILE_PATH_MASTER)
 
-# マスタが空（ファイルなし）の場合の初期化
 if df_master.empty:
     df_master = pd.DataFrame(columns=["商品名", "サイズ", "入り数"])
 
 st.title("📈 在庫動態分析")
 
 if not df_log_raw.empty:
-    # --- データ前処理 ---
     df = df_log_raw.copy()
     df["日時"] = pd.to_datetime(df["日時"], errors='coerce', format='mixed')
     df = df.dropna(subset=["日時"])
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
-    df_out_all = df[df["区分"].str.contains("出庫")].copy()
-    df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
-
     # --- 🔍 絞り込み条件（サイドバー） ---
     with st.sidebar:
         st.markdown("### 🔗 クイック移動")
@@ -68,11 +61,24 @@ if not df_log_raw.empty:
     
         st.sidebar.header("🔍 絞り込み条件")
         
-        # カレンダーによる期間選択
-        min_d = df_out_all["日時"].min().date()
-        max_d = df_out_all["日時"].max().date()
+        # 期間選択
+        min_d = df["日時"].min().date()
+        max_d = df["日時"].max().date()
         start_default = max(min_d, max_d - dt.timedelta(days=30))
         date_range = st.date_input("📅 期間を選択", [start_default, max_d], min_value=min_d, max_value=max_d)
+
+        # ⭐ 追加：予約出庫を含めるかのチェックボックス
+        include_reserve = st.checkbox("予約出庫も含める", value=False)
+        
+        # データ抽出条件の決定
+        if include_reserve:
+            # 「出庫」または「予約出庫」を含む
+            df_out_all = df[df["区分"].str.contains("出庫|予約出庫", na=False)].copy()
+        else:
+            # 「出庫」のみ（予約出庫は除外）
+            df_out_all = df[df["区分"].str.contains("出庫", na=False) & ~df["区分"].str.contains("予約", na=False)].copy()
+
+        df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
         all_item_list = ["すべて表示"] + sorted(df_out_all["商品名"].unique().tolist())
         all_size_list = ["すべて表示"] + sorted(df_out_all["サイズ"].unique().tolist())
@@ -109,19 +115,15 @@ if not df_log_raw.empty:
 
     # --- 表示ロジック ---
     if not df_final.empty:
-        # 基礎データの計算
         df_sum_this = df_final.groupby(["商品名", "サイズ"])["数量"].sum().reset_index()
         df_m_calc = pd.merge(df_sum_this, df_master, on=["商品名", "サイズ"], how="left")
         df_m_calc["入り数"] = pd.to_numeric(df_m_calc["入り数"], errors='coerce').fillna(1).astype(int)
         
-        # 単位の整理
         total_cases_this = df_m_calc["数量"].sum()
         total_pcs_this = (df_m_calc["数量"] * df_m_calc["入り数"]).sum()
         qty_last = df_last["数量"].sum()
         
-        # カラム表示
         cols = st.columns(5) if show_compare else st.columns(4)
-        
         with cols[0]: st.metric("期間内 合計出荷(バラ)", f"{int(total_pcs_this):,}")
         with cols[1]: st.metric("期間内 合計ケース数", f"{int(total_cases_this):,} cs")
         
@@ -170,17 +172,7 @@ if not df_log_raw.empty:
             df_merged = pd.merge(summary_prod, df_master, on=["商品名", "サイズ"], how="left")
             df_merged["入り数"] = pd.to_numeric(df_merged["入り数"], errors='coerce').fillna(1).astype(int)
             df_merged["合計バラ数"] = df_merged["出荷ケース数"] * df_merged["入り数"]
-            
-            st.dataframe(
-                df_merged.sort_values("合計バラ数", ascending=False),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"),
-                    "入り数": st.column_config.NumberColumn("入数/cs"),
-                    "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")
-                }
-            )
+            st.dataframe(df_merged.sort_values("合計バラ数", ascending=False), use_container_width=True, hide_index=True, column_config={"出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"), "入り数": st.column_config.NumberColumn("入数/cs"), "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")})
 
         with tab4:
             col_w1, col_w2 = st.columns(2)
