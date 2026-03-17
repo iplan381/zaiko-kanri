@@ -176,9 +176,9 @@ if not df_log_raw.empty:
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "入り数": st.column_config.NumberColumn("入数/cs"),
                     "出荷ケース数": st.column_config.NumberColumn("出荷ケース数", format="%d cs"),
-                    "合計バラ数": st.column_config.NumberColumn("合計箱数", format="%d pcs")
+                    "入り数": st.column_config.NumberColumn("入数/cs"),
+                    "合計バラ数": st.column_config.NumberColumn("合計バラ数", format="%d pcs")
                 }
             )
 
