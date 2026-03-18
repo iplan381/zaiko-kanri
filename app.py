@@ -249,26 +249,34 @@ st.divider()
 # --- A. 出庫予約リスト ---
 st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
+    # 全体の有効在庫計算用
     res_sum_all = df_res_all.groupby(["商品名", "サイズ", "地名"])["数量"].sum().reset_index().rename(columns={"数量": "予約計"})
     all_stocks = pd.merge(df_stock, res_sum_all, on=["商品名", "サイズ", "地名"], how="left").fillna({"予約計": 0})
-    all_stocks["有効在庫"] = all_stocks["在庫数"] - all_stocks["予約計"]
+    all_stocks["全体有効在庫"] = all_stocks["在庫数"] - all_stocks["予約計"]
 
-    df_rv = pd.merge(df_res_all, all_stocks[["商品名", "サイズ", "地名", "在庫数", "有効在庫"]], on=["商品名", "サイズ", "地名"], how="left").fillna({"在庫数": 0, "有効在庫": 0})
+    # 予約リストに在庫情報を結合
+    df_rv = pd.merge(df_res_all, all_stocks[["商品名", "サイズ", "地名", "在庫数", "全体有効在庫"]], on=["商品名", "サイズ", "地名"], how="left").fillna({"在庫数": 0, "全体有効在庫": 0})
+    
+    # 【追加機能】この予約だけを引いたあとの在庫を計算
+    df_rv["出荷後在庫"] = df_rv["在庫数"] - df_rv["数量"]
     
     res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
     if res_filter_item != "すべて":
         df_rv = df_rv[df_rv["商品名"] == res_filter_item]
 
     df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
-    res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "有効在庫", "担当者"]
+    
+    # 表示列の整理（「出荷後在庫」を追加）
+    res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "出荷後在庫", "全体有効在庫", "担当者"]
 
     res_event = st.dataframe(
         df_rv[res_disp_cols].sort_values("予約日"), use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row",
         column_config={
             "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
             "数量": st.column_config.NumberColumn("予約数", format="%d"),
-            "在庫数": st.column_config.NumberColumn("実在庫", format="%d"),
-            "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d")
+            "在庫数": st.column_config.NumberColumn("現在の実在庫", format="%d"),
+            "出荷後在庫": st.column_config.NumberColumn("この出荷後の残数", format="%d"),
+            "全体有効在庫": st.column_config.NumberColumn("全予約反映後の在庫", format="%d")
         }
     )
     
