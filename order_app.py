@@ -86,7 +86,7 @@ with st.sidebar:
     st.divider()
     with st.expander("⚙️ マスタ登録"):
         with st.form("master_form", clear_on_submit=True):
-            m_cat = st.selectbox("カテゴリ", ["化粧箱", "トレイ", "ダンボール", "その他"])
+            m_cat = st.selectbox("カテゴリ", ["化粧箱", "トレイ", "ダンボール", "包装紙", "その他"])
             m_item = st.text_input("資材名")
             m_prod = st.text_input("商品名")
             if st.form_submit_button("マスタに追加", use_container_width=True):
