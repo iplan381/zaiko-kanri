@@ -250,7 +250,6 @@ st.divider()
 st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
     # 1. 予約リストに在庫情報を結合
-    # 商品名・サイズ・地名ごとの現在の実在庫を引っ張ってくる
     df_rv = pd.merge(
         df_res_all, 
         df_stock[["商品名", "サイズ", "地名", "在庫数"]], 
@@ -258,16 +257,19 @@ if not df_res_all.empty:
         how="left"
     ).fillna({"在庫数": 0})
 
-    # 2. 【重要】商品・サイズ・地名ごとに「予約日順」で並び替えて累積を計算
-    # 予約日を一時的にdatetime型にしてソート
+    # 2. 累積在庫と全体有効在庫の計算
+    # 商品・場所ごとにグループ化して計算
     df_rv["予約日_tmp"] = pd.to_datetime(df_rv["予約日"])
     df_rv = df_rv.sort_values(["商品名", "サイズ", "地名", "予約日_tmp"])
-
-    # グループごとに予約数量を上から足していく（累積予約数）
-    df_rv["累積予約数"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].cumsum()
     
-    # 実在庫からその時点までの累積予約を引く（これが「その時の予定在庫」）
+    # 累積予約（上から順に足していく）
+    df_rv["累積予約数"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].cumsum()
+    # 全体予約合計（その商品の予約をすべて足した数）
+    df_rv["全予約合計"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].transform("sum")
+    
+    # 計算列の作成
     df_rv["出荷後在庫"] = df_rv["在庫数"] - df_rv["累積予約数"]
+    df_rv["全体有効在庫"] = df_rv["在庫数"] - df_rv["全予約合計"]
 
     # 3. 画面表示用のフィルター
     res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
@@ -276,17 +278,22 @@ if not df_res_all.empty:
 
     df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
     
-    # 表示列の整理
-    res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "出荷後在庫", "担当者"]
+    # 表示列の整理（「出荷後在庫」と「全体有効在庫」を両方入れる）
+    res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "出荷後在庫", "全体有効在庫", "担当者"]
 
-    # 4. テーブル表示
-    st.dataframe(
-        df_rv[res_disp_cols], use_container_width=True, hide_index=True,
+    # 4. テーブル表示（res_event 変数を定義してエラーを回避）
+    res_event = st.dataframe(
+        df_rv[res_disp_cols], 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun",
+        selection_mode="multi-row",
         column_config={
             "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
-            "数量": st.column_config.NumberColumn("今回の予約数", format="%d"),
+            "数量": st.column_config.NumberColumn("予約数", format="%d"),
             "在庫数": st.column_config.NumberColumn("現在の実在庫", format="%d"),
-            "出荷後在庫": st.column_config.NumberColumn("この出荷完了時の予想残数", format="%d"),
+            "出荷後在庫": st.column_config.NumberColumn("今回の出荷後残数", format="%d"),
+            "全体有効在庫": st.column_config.NumberColumn("全予約完了後の残数", format="%d"),
         }
     )
     
