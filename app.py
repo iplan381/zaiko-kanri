@@ -257,53 +257,47 @@ if not df_res_all.empty:
         how="left"
     ).fillna({"在庫数": 0})
 
-    # 2. 累積在庫と全体有効在庫の計算
-    # 商品・場所ごとにグループ化して計算
+    # 2. 累積計算（並び替えてから累積を出し、最後に「元の行番号」を保持する）
     df_rv["予約日_tmp"] = pd.to_datetime(df_rv["予約日"])
     df_rv = df_rv.sort_values(["商品名", "サイズ", "地名", "予約日_tmp"])
     
-    # 累積予約（上から順に足していく）
     df_rv["累積予約数"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].cumsum()
-    # 全体予約合計（その商品の予約をすべて足した数）
     df_rv["全予約合計"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].transform("sum")
-    
-    # 計算列の作成
     df_rv["出荷後在庫"] = df_rv["在庫数"] - df_rv["累積予約数"]
     df_rv["全体有効在庫"] = df_rv["在庫数"] - df_rv["全予約合計"]
 
-    # 3. 画面表示用のフィルター
-    res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
-    if res_filter_item != "すべて":
-        df_rv = df_rv[df_rv["商品名"] == res_filter_item]
+    # 重要：ここで現在の並び順に基づいた「一時的なID」を振る
+    df_rv = df_rv.reset_index() # 元の index を 'index' 列として保持
+    df_rv["tmp_id"] = range(len(df_rv))
 
-    df_rv["予約日"] = pd.to_datetime(df_rv["予約日"]).dt.date
-    
-    # 表示列の整理（「出荷後在庫」と「全体有効在庫」を両方入れる）
+    # 3. 画面表示用のフィルター（tmp_id は保持される）
+    res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
+    df_rv_display = df_rv.copy()
+    if res_filter_item != "すべて":
+        df_rv_display = df_rv_display[df_rv_display["商品名"] == res_filter_item]
+
+    df_rv_display["予約日"] = pd.to_datetime(df_rv_display["予約日"]).dt.date
     res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "出荷後在庫", "全体有効在庫", "担当者"]
 
-    # 4. テーブル表示（res_event 変数を定義してエラーを回避）
+    # 4. テーブル表示
     res_event = st.dataframe(
-        df_rv[res_disp_cols], 
+        df_rv_display[res_disp_cols], 
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun",
-        selection_mode="multi-row",
-        column_config={
-            "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
-            "数量": st.column_config.NumberColumn("予約数", format="%d"),
-            "在庫数": st.column_config.NumberColumn("現在の実在庫", format="%d"),
-            "出荷後在庫": st.column_config.NumberColumn("今回の出荷後残数", format="%d"),
-            "全体有効在庫": st.column_config.NumberColumn("全予約完了後の残数", format="%d"),
-        }
+        selection_mode="multi-row"
     )
     
-    selected_rows = res_event.selection.rows
-    if selected_rows:
-        st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_rows)}件) を編集")
-        df_target = df_rv.sort_values("予約日").iloc[selected_rows]
+    # 5. 選択行の特定（tmp_id を使って正しく紐付け）
+    selected_indices = res_event.selection.rows
+    if selected_indices:
+        st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_indices)}件) を編集")
+        # 選択された行の tmp_id を取得し、それをもとに df_rv からデータを抽出
+        df_selected = df_rv_display.iloc[selected_indices]
+        
         res_updates = {}
-        for i, row in df_target.iterrows():
-            orig_idx = row.name
+        for i, row in df_selected.iterrows():
+            orig_idx = row["index"] # 元の df_res_all のインデックス
             with st.expander(f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
                 c1, c2, c3 = st.columns([1.5, 1, 0.5])
                 with c1: upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
@@ -313,14 +307,14 @@ if not df_res_all.empty:
 
         if st.button("✅ 予約の変更/削除を確定する", type="primary", use_container_width=True):
             new_df_res = df_res_all.copy()
-            indices_to_drop = [o_idx for o_idx, val in res_updates.items() if val["delete"]]
             for o_idx, val in res_updates.items():
-                if not val["delete"]:
+                if val["delete"]:
+                    new_df_res = new_df_res.drop(o_idx)
+                else:
                     new_df_res.at[o_idx, "予約日"] = str(val["date"])
                     new_df_res.at[o_idx, "数量"] = val["qty"]
-            if indices_to_drop:
-                new_df_res = new_df_res.drop(indices_to_drop)
-            update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Individual Res Update Fix")
+            
+            update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Fixed Index Sync Issue")
             st.rerun()
 else:
     st.write("現在予約はありません。")
