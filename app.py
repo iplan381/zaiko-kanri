@@ -164,104 +164,106 @@ event = st.dataframe(
 st.divider()
 selected_indices = event.selection.rows
 if selected_indices:
-    # 表示用の df_show から選択された行を特定
     selected_data_list = df_show.iloc[selected_indices]
     st.markdown(f"### 📋 {len(selected_data_list)} 件の一括操作")
     
-    # 1. 共通設定エリア（ここで一気に決める）
+    # --- 1. 共通設定エリア ---
+    # ここで選んだ「区分」と「日付」が下の各パネルに自動反映されるぜ
     with st.container(border=True):
         st.markdown("**⚡ 全選択データへの共通適用**")
         cc1, cc2, cc3 = st.columns([1, 1, 1])
         with cc1:
-            bulk_type = st.radio("共通の操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True)
+            bulk_type = st.radio("共通の操作区分", ["個別設定", "入庫", "出庫", "予約出庫", "調整"], horizontal=True)
         with cc2:
-            bulk_date = st.date_input("共通の予約日 (予約出庫用)", value=dt.date.today() + dt.timedelta(days=1))
+            bulk_date = st.date_input("共通の予約日 (予約出庫のみ)", value=dt.date.today() + dt.timedelta(days=1))
         with cc3:
             user_name = st.selectbox("担当者を選んでください", ["-- 選択 --"] + USERS)
 
-    # 2. 個別入力エリア（表形式）
     if user_name != "-- 選択 --":
-        st.markdown("#### 🔢 数量入力")
-        
-        # ヘッダー
-        h1, h2, h3, h4 = st.columns([2, 1, 1, 0.5])
-        h1.caption("商品名 (サイズ)")
-        h2.caption(f"数量を入力")
-        h3.caption("地名 / 予約日")
-        h4.caption("削除")
-        
         update_payload = {}
         for i, row in selected_data_list.iterrows():
-            # 各行をコンテナに入れてスッキリさせる
-            with st.container():
-                c1, c2, c3, c4 = st.columns([2, 1, 1, 0.5])
-                
-                # 商品情報
-                c1.write(f"**{row['商品名']}**\n({row['サイズ']})")
-                
-                # 数量入力（ラベルを隠してスッキリ）
-                m_qty = c2.number_input("数量", min_value=0 if bulk_type != "調整" else -10000, value=0, key=f"qty_{i}", label_visibility="collapsed")
-                
-                # 地名 or 予約日の自動切替
-                if bulk_type == "予約出庫":
-                    res_date = bulk_date
-                    c3.info(f"📅 {res_date}")
-                    new_loc = row['地名']
-                else:
-                    new_loc = c3.text_input("地名", value=row['地名'], key=f"loc_{i}", label_visibility="collapsed")
-                    res_date = None
-                
-                # 削除チェック
-                is_delete = c4.checkbox("🔥", key=f"del_{i}")
-                
-                # データを保持（元の df_stock でのインデックスを特定するために商品名・サイズ・地名を使用）
-                update_payload[i] = {
-                    "type": bulk_type, "qty": m_qty, "loc": new_loc, 
-                    "alert": row['アラート基準'], "delete": is_delete, 
-                    "res_date": res_date, "orig_data": row
-                }
-            st.divider()
-
-        # 3. 確定ボタンとGitHub更新処理
-        with st.popover("✅ 入力内容を確認して確定する", use_container_width=True):
-            st.markdown(f"### ⚠️ 実行確認 ({bulk_type})")
-            st.write(f"担当者: {user_name}")
-            st.warning("この操作は取り消せません。よろしいですか？")
+            # bulk_type が「個別設定」の時だけ、最初からパネルを開いておく設定
+            is_expanded = (bulk_type == "個別設定")
             
-            if st.button("👌 実行する", type="primary", use_container_width=True):
-                now, new_logs, new_reservations = get_now_jst(), [], []
+            with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=is_expanded):
+                col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
                 
-                for idx, p in update_payload.items():
-                    row = p["orig_data"]
-                    # 元の df_stock から該当行を探す
-                    target_mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
-                    if target_mask.any():
-                        orig_idx = df_stock[target_mask].index[0]
-                        
-                        if p["delete"]:
-                            df_stock = df_stock.drop(orig_idx)
-                            new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "在庫数": 0, "担当者": user_name})
-                        elif p["type"] == "予約出庫" and p["qty"] > 0:
-                            new_reservations.append({"予約日": str(p["res_date"]), "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
-                        else:
-                            if p["type"] == "入庫" or p["type"] == "調整":
-                                df_stock.at[orig_idx, "在庫数"] += p["qty"]
-                            elif p["type"] == "出庫":
-                                df_stock.at[orig_idx, "在庫数"] -= p["qty"]
-                            
-                            df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], now
-                            curr_stock = df_stock.at[orig_idx, "在庫数"]
-                            if p["qty"] != 0:
-                                new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": curr_stock, "担当者": user_name})
+                with col1:
+                    # 共通設定が「個別設定」以外なら、ラジオボタンを無効化して共通値を表示
+                    if bulk_type == "個別設定":
+                        m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True, key=f"type_{i}")
+                    else:
+                        st.info(f"区分: {bulk_type}")
+                        m_type = bulk_type
+
+                with col2:
+                    m_qty = st.number_input("数量", min_value=0 if m_type != "調整" else -10000, value=0, key=f"qty_{i}")
+
+                with col3:
+                    if m_type == "予約出庫":
+                        # 共通設定の日付を初期値にする
+                        res_date = st.date_input("予約日", value=bulk_date, key=f"date_{i}")
+                        new_loc = row['地名']
+                    else:
+                        new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
+                        res_date = None
+
+                with col4: 
+                    new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
+                with col5: 
+                    is_delete = st.checkbox("削除", key=f"del_{i}")
                 
-                # GitHubへの書き込み
-                if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update"):
-                    if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
-                    if new_reservations:
-                        df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
-                        update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
-                    st.success("更新完了！")
-                    st.rerun()
+                update_payload[i] = {
+                    "type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, 
+                    "delete": is_delete, "res_date": res_date, "orig_data": row
+                }
+
+        # --- 確定ボタン（ポップオーバー） ---
+        with st.popover("✅ 入力内容を確認して確定する", use_container_width=True):
+            st.markdown("### ⚠️ 以下の内容で確定しますか？")
+            
+            summary_list = []
+            for idx, p in update_payload.items():
+                row = p["orig_data"]
+                if p["delete"]:
+                    summary_list.append(f"🔥 **削除**: {row['商品名']} ({row['サイズ']}/{row['地名']})")
+                elif p["qty"] != 0 or p["loc"] != row["地名"]:
+                    summary_list.append(f"📝 **{p['type']}**: {row['商品名']} ({row['サイズ']}) 数量:{p['qty']}")
+            
+            if summary_list:
+                for item in summary_list: st.write(item)
+                st.warning("この操作は取り消せません。")
+                
+                if st.button("👌 実行する", type="primary", use_container_width=True):
+                    now, new_logs, new_reservations = get_now_jst(), [], []
+                    for idx, p in update_payload.items():
+                        row = p["orig_data"]
+                        target_mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
+                        if target_mask.any():
+                            orig_idx = df_stock[target_mask].index[0]
+                            if p["delete"]:
+                                df_stock = df_stock.drop(orig_idx)
+                                new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "区分": "削除", "数量": 0, "在庫数": 0, "担当者": user_name})
+                            elif p["type"] == "予約出庫" and p["qty"] > 0:
+                                new_reservations.append({"予約日": str(p["res_date"]), "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name})
+                            else:
+                                if p["type"] == "入庫" or p["type"] == "調整":
+                                    df_stock.at[orig_idx, "在庫数"] += p["qty"]
+                                elif p["type"] == "出庫":
+                                    df_stock.at[orig_idx, "在庫数"] -= p["qty"]
+                                df_stock.at[orig_idx, "地名"], df_stock.at[orig_idx, "アラート基準"], df_stock.at[orig_idx, "最終更新日"] = p["loc"], p["alert"], now
+                                if p["qty"] != 0:
+                                    new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": df_stock.at[orig_idx, "在庫数"], "担当者": user_name})
+
+                    if update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Batch Update"):
+                        if new_logs: update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Log Update")
+                        if new_reservations:
+                            df_res_old, sha_res = get_github_data(FILE_PATH_RESERVATION)
+                            update_github_data(FILE_PATH_RESERVATION, pd.concat([df_res_old, pd.DataFrame(new_reservations)], ignore_index=True), sha_res, "Add Reservation")
+                        st.success("更新が完了しました！")
+                        st.rerun()
+            else:
+                st.info("変更内容が入力されていません。")
 else:
     st.info("💡 **一覧で複数チェックを入れると、一括操作パネルが表示されます。**")
 
