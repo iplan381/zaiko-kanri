@@ -167,17 +167,22 @@ if selected_indices:
     selected_data_list = df_show.iloc[selected_indices]
     st.markdown(f"### 📋 {len(selected_data_list)} 件の一括操作")
     
-    # --- 1. 共通設定エリア ---
-    # ここで選んだ「区分」と「日付」が下の各パネルに自動反映されるぜ
+   # --- 1. 共通設定（ここで区分と日付を一括指定） ---
     with st.container(border=True):
-        st.markdown("**⚡ 全選択データへの共通適用**")
-        cc1, cc2, cc3 = st.columns([1, 1, 1])
+        st.markdown("**⚡ 全選択データへの共通設定**")
+        cc1, cc2, cc3 = st.columns([1.5, 1, 1])
         with cc1:
-            bulk_type = st.radio("共通の操作区分", ["個別設定", "入庫", "出庫", "予約出庫", "調整"], horizontal=True)
+            bulk_type = st.radio("操作区分を一括変更", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True)
         with cc2:
-            bulk_date = st.date_input("共通の予約日 (予約出庫のみ)", value=dt.date.today() + dt.timedelta(days=1))
+            # bulk_type が "予約出庫" 以外の時は disabled=True にする
+            is_not_res = (bulk_type != "予約出庫")
+            bulk_date = st.date_input(
+                "共通の予約日 (予約出庫のみ有効)", 
+                value=dt.date.today() + dt.timedelta(days=1),
+                disabled=is_not_res  # ここでグレーアウトを制御！
+            )
         with cc3:
-            user_name = st.selectbox("担当者を選んでください", ["-- 選択 --"] + USERS)
+            user_name = st.selectbox("担当者", ["-- 選択 --"] + USERS)
 
     if user_name != "-- 選択 --":
         update_payload = {}
