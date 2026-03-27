@@ -166,30 +166,53 @@ selected_indices = event.selection.rows
 if selected_indices:
     selected_data_list = df_show.iloc[selected_indices]
     st.markdown(f"### 📋 {len(selected_data_list)} 件の一括操作")
-    user_list = ["-- 選択 --"] + USERS
-    user_name = st.selectbox("担当者を選んでください", user_list)
     
+    # --- 共通設定エリア ---
+    with st.expander("⚡ すべてに適用する共通設定", expanded=True):
+        cc1, cc2, cc3 = st.columns([1, 1, 1])
+        with cc1:
+            bulk_type = st.radio("共通の操作区分", ["個別設定", "入庫", "出庫", "予約出庫", "調整"], horizontal=True)
+        with cc2:
+            bulk_date = st.date_input("共通の予約日 (予約出庫のみ)", value=dt.date.today() + dt.timedelta(days=1))
+        with cc3:
+            user_list = ["-- 選択 --"] + USERS
+            user_name = st.selectbox("担当者を選んでください", user_list)
+
     if user_name != "-- 選択 --":
         update_payload = {}
         for i, row in selected_data_list.iterrows():
-            with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
+            with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=(bulk_type == "個別設定")):
                 col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
-                with col1: m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True, key=f"type_{i}")
-                with col2:
-                    if m_type == "調整":
-                        m_qty = st.number_input("数量", value=0, key=f"qty_{i}")
+                
+                with col1:
+                    # 共通設定が「個別設定」以外ならそれを使い、そうでなければラジオボタン
+                    if bulk_type == "個別設定":
+                        m_type = st.radio("操作区分", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True, key=f"type_{i}")
                     else:
-                        m_qty = st.number_input("数量", min_value=0, value=0, key=f"qty_{i}")
+                        st.info(f"区分: {bulk_type}")
+                        m_type = bulk_type
+
+                with col2:
+                    m_qty = st.number_input("数量", min_value=0 if m_type != "調整" else -10000, value=0, key=f"qty_{i}")
+
                 with col3:
                     if m_type == "予約出庫":
-                        res_date = st.date_input("予約日", value=dt.date.today() + dt.timedelta(days=1), key=f"date_{i}")
+                        # 共通設定の日付を表示（一応個別でも変えられるようにしておく）
+                        res_date = st.date_input("予約日", value=bulk_date, key=f"date_{i}")
                         new_loc = row['地名']
                     else:
                         new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
-                with col4: new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
-                with col5: is_delete = st.checkbox("削除", key=f"del_{i}")
-                update_payload[i] = {"type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, "delete": is_delete, "res_date": res_date if m_type == "予約出庫" else None, "orig_data": row}
+                        res_date = None
 
+                with col4: 
+                    new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
+                with col5: 
+                    is_delete = st.checkbox("削除", key=f"del_{i}")
+                
+                update_payload[i] = {
+                    "type": m_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, 
+                    "delete": is_delete, "res_date": res_date, "orig_data": row
+                }
      # --- 確定ボタンの代わりにポップオーバー（確認画面）を設置 ---
         with st.popover("✅ 入力内容を確認して確定する", use_container_width=True):
             st.markdown("### ⚠️ 以下の内容で確定しますか？")
