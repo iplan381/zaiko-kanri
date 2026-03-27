@@ -77,6 +77,12 @@ def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
+def highlight_res_alert(row):
+    styles = [''] * len(row)
+    if "出荷後在庫" in row.index and row["出荷後在庫"] < 0:
+        return ['background-color: #d9534f; color: white'] * len(row)
+    return styles
+
 def highlight_alert(row):
     styles = [''] * len(row)
     if "有効在庫" in row.index and row["有効在庫"] < row["アラート基準"]:
@@ -279,13 +285,22 @@ if not df_res_all.empty:
     df_rv_display["予約日"] = pd.to_datetime(df_rv_display["予約日"]).dt.date
     res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "出荷後在庫", "全体有効在庫", "担当者"]
 
-    # 4. テーブル表示
+   # 4. テーブル表示
+    styled_rv = df_rv_display[res_disp_cols].style.apply(highlight_res_alert, axis=1)
+
     res_event = st.dataframe(
-        df_rv_display[res_disp_cols], 
+        styled_rv,  # ← ここを df_rv_display ではなく styled_rv にする
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun",
-        selection_mode="multi-row"
+        selection_mode="multi-row",
+        column_config={
+            "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
+            "数量": st.column_config.NumberColumn("予約数", format="%d"),
+            "在庫数": st.column_config.NumberColumn("現在の実在庫", format="%d"),
+            "出荷後在庫": st.column_config.NumberColumn("今回の出荷後残数", format="%d"),
+            "全体有効在庫": st.column_config.NumberColumn("全予約完了後の残数", format="%d"),
+        }
     )
     
     # 5. 選択行の特定（tmp_id を使って正しく紐付け）
