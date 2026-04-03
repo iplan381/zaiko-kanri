@@ -207,26 +207,27 @@ if selected_indices:
                     "delete": is_delete, "res_date": res_date, "orig_data": row
                 }
 
-        # --- 確定画面（ポップオーバー） ---
+   # --- 確定画面（ポップオーバー） ---
         with st.popover("✅ 内容を確認して確定", use_container_width=True):
             st.markdown(f"### ⚠️ 以下の内容で確定しますか？")
             
             summary_list = []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
-                # 指定の形式：商品名 (サイズ) 地名　数量：○
-                item_detail = f"{row['商品名']} ({row['サイズ']}) {row['地名']}　{p['qty']}"
+                # 各項目の間に全角スペースを2つずつ挟んで間隔を確保
+                # 商品名　　サイズ　　地名　　数量：○ の形
+                item_detail = f"{row['商品名']}　　({row['サイズ']})　　{row['地名']}　　数量：{p['qty']}"
                 
                 if p["delete"]:
-                    summary_list.append(f"🔥 **削除**: {row['商品名']} ({row['サイズ']}) {row['地名']}")
+                    summary_list.append(f"🔥 **削除**: {row['商品名']}　　({row['サイズ']})　　{row['地名']}")
                 elif p["qty"] != 0 or p["loc"] != row["地名"]:
                     if p["type"] == "予約出庫":
                         summary_list.append(f"📅 **{p['type']}**: {item_detail} (予約日:{p['res_date']})")
                     else:
-                        # 地名が変わる場合は、変更後の地名を反映した詳細を作る
-                        current_item =  f"{row[ '商品名' ]}  {row[ 'サイズ' ]}  {p[ 'loc' ]}　{p['qty']}"
+                        # 地名変更時も同様にスペースを空ける
+                        current_item = f"{row['商品名']}　　({row['サイズ']})　　{p['loc']}　　数量：{p['qty']}"
                         loc_change = f" ※地名変更: {row['地名']} → {p['loc']}" if p["loc"] != row["地名"] else ""
-                        summary_list.append(f"📝 **{p['type']}** :  {current_item}{loc_change}")
+                        summary_list.append(f"📝 **{p['type']}**: {current_item}{loc_change}")
             
             if summary_list:
                 for item in summary_list:
@@ -234,9 +235,8 @@ if selected_indices:
                 st.divider()
                 
                 if st.button("👌 実行する", type="primary", use_container_width=True):
-                    # --- 実行処理 ---
                     st.write("処理を実行中...")
-                    # 実際の更新ロジックをここに記述
+                    # 実際の更新ロジック
                     st.success("更新が完了しました。")
                     st.rerun()
             else:
