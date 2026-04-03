@@ -222,7 +222,7 @@ if selected_indices:
                     if p["type"] == "予約出庫":
                         summary_list.append(f"📅 **{p['type']}**: {item_detail} (予約日:{p['res_date']})")
                     else:
-                        current_item = f"{row['商品名']}　({row['サイズ']})　{p['loc']}　数量：{p['qty']}"
+                        current_item =  f"{row['商品名']}　{row['サイズ']}　{p['loc']}　{p['qty']}"
                         loc_change = f" (地名変更: {row['地名']} → {p['loc']})" if p["loc"] != row["地名"] else ""
                         summary_list.append(f"📝 **{p['type']}**: {current_item}{loc_change}")
             
