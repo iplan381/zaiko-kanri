@@ -214,8 +214,8 @@ if selected_indices:
             summary_list = []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
-                # 【ここを修正！】地名もしっかり表示に含める
-                item_detail = f"{row['商品名']} ({row['サイズ']} / {row['地名']})"
+                # ポップオーバーの中身を 【地名】商品名 の形式にする
+                item_detail = f"【{row['地名']}】{row['商品名']} ({row['サイズ']})"
                 
                 if p["delete"]:
                     summary_list.append(f"🔥 **削除**: {item_detail}")
@@ -231,12 +231,15 @@ if selected_indices:
                 for item in summary_list:
                     st.write(item)
                 st.divider()
-               if st.button("👌 実行する", type="primary", use_container_width=True):
-                    # --- ここから下の字下げ（スペース4つ）が重要 ---
+                
+                if st.button("👌 実行する", type="primary", use_container_width=True):
+                    # --- 字下げ（インデント）を修正し、エラーを回避 ---
                     st.write("処理を実行中...")
-                    # 実際の更新処理をここに書く（今は仮置きでエラーを消す）
+                    # ここに実際の更新処理を入れる
                     st.success("更新が完了しました。")
                     st.rerun()
+            else:
+                st.write("変更内容がありません。")
 
 # --- 6. 予約・履歴 ---
 st.divider()
