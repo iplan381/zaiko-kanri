@@ -226,7 +226,7 @@ if selected_indices:
                         # 地名が変わる場合は、変更後の地名を反映した詳細を作る
                         current_item = f"{row['商品名']} ({row['サイズ']}) {p['loc']}　数量：{p['qty']}"
                         loc_change = f" ※地名変更: {row['地名']} → {p['loc']}" if p["loc"] != row["地名"] else ""
-                        summary_list.append(f"📝 **{p['type']}**: {current_item}{loc_change}")
+                        summary_list.append(f"📝 **{p['type']}** :  {current_item}{loc_change}")
             
             if summary_list:
                 for item in summary_list:
