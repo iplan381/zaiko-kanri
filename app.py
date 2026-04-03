@@ -224,20 +224,32 @@ if selected_indices:
                 }
 
         # --- 確定ボタン（ポップオーバー） ---
-        with st.popover("✅ 入力内容を確認して確定する", use_container_width=True):
-            st.markdown("### ⚠️ 以下の内容で確定しますか？")
+        with st.popover("✅ 内容を確認して確定", use_container_width=True):
+            st.markdown(f"### ⚠️ 以下の内容で確定しますか？")
             
             summary_list = []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
+                
+                # 地名を含めた詳細テキストを作成
+                item_detail = f"{row['商品名']} ({row['サイズ']} / {row['地名']})"
+                
                 if p["delete"]:
-                    summary_list.append(f"🔥 **削除**: {row['商品名']} ({row['サイズ']}/{row['地名']})")
+                    summary_list.append(f"🔥 **削除**: {item_detail}")
                 elif p["qty"] != 0 or p["loc"] != row["地名"]:
-                    summary_list.append(f"📝 **{p['type']}**: {row['商品名']} ({row['サイズ']}) 数量:{p['qty']}")
+                    if p["type"] == "予約出庫":
+                        summary_list.append(f"📅 **{p['type']}**: {item_detail} 数量:{p['qty']} (予約日:{p['res_date']})")
+                    else:
+                        # 地名変更がある場合は矢印で表示
+                        loc_info = f"地名:{row['地名']} → {p['loc']}" if p["loc"] != row["地名"] else f"地名:{row['地名']}"
+                        summary_list.append(f"📝 **{p['type']}**: {item_detail} 数量:{p['qty']} ({loc_info})")
             
             if summary_list:
-                for item in summary_list: st.write(item)
-                st.warning("この操作は取り消せません。")
+                for item in summary_list:
+                    st.write(item)
+                
+                st.divider()
+                st.warning("この操作は取り消せません。よろしいですか？")
                 
                 if st.button("👌 実行する", type="primary", use_container_width=True):
                     now, new_logs, new_reservations = get_now_jst(), [], []
