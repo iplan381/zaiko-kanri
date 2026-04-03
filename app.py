@@ -214,7 +214,7 @@ if selected_indices:
             for idx, p in update_payload.items():
                 row = p["orig_data"]
                 # 項目間を全角スペース1つ分に短縮
-                item_detail = f"{row['商品名']}　({row['サイズ']})　{row['地名']}　数量：{p['qty']}"
+                item_detail =  f"{row['商品名']}　{row['サイズ']}　{row['地名']}　{p['qty']}"
                 
                 if p["delete"]:
                     summary_list.append(f"🔥 **削除**: {row['商品名']}　({row['サイズ']})　{row['地名']}")
