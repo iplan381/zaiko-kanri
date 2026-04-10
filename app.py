@@ -187,7 +187,8 @@ if selected_indices:
                 with col1:
                     st.info(f"区分: {bulk_type}")
                 with col2:
-                    m_qty = st.number_input("数量", min_value=0 if bulk_type != "調整" else -10000, value=0, key=f"qty_{i}")
+                    # 調整も含め、基本は0スタート。調整時はマイナス入力で減算させる。
+                    m_qty = st.number_input("数量", min_value=-10000, value=0, key=f"qty_{i}")
                 with col3:
                     if bulk_type == "予約出庫":
                         res_date = bulk_date
@@ -213,8 +214,7 @@ if selected_indices:
             summary_list = []
             for idx, p in update_payload.items():
                 row = p["orig_data"]
-                # 項目間を全角スペース1つ分に短縮
-                item_detail =  f"{row['商品名']}　{row['サイズ']}　{row['地名']}　{p['qty']}"
+                item_detail = f"{row['商品名']}　({row['サイズ']})　{row['地名']}　数量：{p['qty']}"
                 
                 if p["delete"]:
                     summary_list.append(f"🔥 **削除**: {row['商品名']}　({row['サイズ']})　{row['地名']}")
@@ -222,7 +222,7 @@ if selected_indices:
                     if p["type"] == "予約出庫":
                         summary_list.append(f"📅 **{p['type']}**: {item_detail} (予約日:{p['res_date']})")
                     else:
-                        current_item =  f"{row['商品名']}　{row['サイズ']}　{p['loc']}　{p['qty']}"
+                        current_item = f"{row['商品名']}　({row['サイズ']})　{p['loc']}　数量：{p['qty']}"
                         loc_change = f" (地名変更: {row['地名']} → {p['loc']})" if p["loc"] != row["地名"] else ""
                         summary_list.append(f"📝 **{p['type']}**: {current_item}{loc_change}")
             
@@ -251,13 +251,25 @@ if selected_indices:
                                 res_row = pd.DataFrame([{"予約日": str(p["res_date"]), "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name}])
                                 new_reservations = pd.concat([new_reservations, res_row], ignore_index=True)
                             else:
-                                if p["type"] == "入庫": new_df_stock.at[target_idx, "在庫数"] += p["qty"]
-                                elif p["type"] == "出庫": new_df_stock.at[target_idx, "在庫数"] -= p["qty"]
-                                elif p["type"] == "調整": new_df_stock.at[target_idx, "在庫数"] = p["qty"]
-                                new_df_stock.at[target_idx, "地名"], new_df_stock.at[target_idx, "アラート基準"], new_df_stock.at[target_idx, "最終更新日"] = p["loc"], p["alert"], now
-                                new_logs.append({"日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": p["loc"], "区分": p["type"], "数量": p["qty"], "在庫数": new_df_stock.at[target_idx, "在庫数"], "担当者": user_name})
+                                # --- 数量計算（調整も加算・減算にする） ---
+                                if p["type"] == "入庫":
+                                    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
+                                elif p["type"] == "出庫":
+                                    new_df_stock.at[target_idx, "在庫数"] -= p["qty"]
+                                elif p["type"] == "調整":
+                                    # 調整も現在の在庫に対して数値を足し引きする
+                                    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
+                                
+                                new_df_stock.at[target_idx, "地名"] = p["loc"]
+                                new_df_stock.at[target_idx, "アラート基準"] = p["alert"]
+                                new_df_stock.at[target_idx, "最終更新日"] = now
+                                
+                                new_logs.append({
+                                    "日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], 
+                                    "地名": p["loc"], "区分": p["type"], "数量": p["qty"], 
+                                    "在庫数": new_df_stock.at[target_idx, "在庫数"], "担当者": user_name
+                                })
 
-                    # GitHub更新
                     if update_github_data(FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update") and \
                        update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Add Log") and \
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
