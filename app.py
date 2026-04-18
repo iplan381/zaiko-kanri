@@ -17,7 +17,7 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 SIZES_MASTER = ["大", "中", "小", "4個入", " - "]
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
-USERS = ["佐藤", "手塚", "檀原"]
+USERS = ["佐藤", "手塚"]
 
 st.set_page_config(page_title="在庫管理システム", layout="wide")
 
