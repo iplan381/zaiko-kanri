@@ -10,7 +10,6 @@ import datetime as dt
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_LOG = "stock_log_main.csv"
 FILE_PATH_MASTER = "item_master.csv"
-FILE_PATH_RESERVATION = "reservations_main.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 st.set_page_config(page_title="出庫分析", layout="wide")
@@ -42,7 +41,6 @@ def save_master_to_github(df_to_save):
 
 df_log_raw = get_github_data(FILE_PATH_LOG)
 df_master = get_github_data(FILE_PATH_MASTER)
-df_res_raw = get_github_data(FILE_PATH_RESERVATION)
 
 # マスタが空（ファイルなし）の場合の初期化
 if df_master.empty:
@@ -57,9 +55,8 @@ if not df_log_raw.empty:
     df = df.dropna(subset=["日時"])
     df["数量"] = pd.to_numeric(df["数量"], errors='coerce').fillna(0)
     
-    # 1. 実績データのベース作成
     df_out_all = df[df["区分"].str.contains("出庫")].copy()
-    df_out_all["データ種別"] = "実績" 
+    df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
 
     # --- 🔍 絞り込み条件（サイドバー） ---
     with st.sidebar:
@@ -70,21 +67,8 @@ if not df_log_raw.empty:
         st.divider()
     
         st.sidebar.header("🔍 絞り込み条件")
-
-        # 2. 予約スイッチとデータの合体
-        show_reservation = st.checkbox("📅 出庫予約を含めて分析する", value=False)
         
-        if show_reservation and not df_res_raw.empty:
-            df_res = df_res_raw.copy()
-            df_res["日時"] = pd.to_datetime(df_res["予約日"], errors='coerce')
-            df_res["数量"] = pd.to_numeric(df_res["数量"], errors='coerce').fillna(0)
-            df_res["データ種別"] = "予約"
-            df_out_all = pd.concat([df_out_all, df_res], ignore_index=True)
-
-        # 項目詳細の作成
-        df_out_all["項目詳細"] = df_out_all["商品名"].astype(str) + " | " + df_out_all["サイズ"].astype(str) + " | " + df_out_all["地名"].astype(str)
-
-        # カレンダーの基準日を計算
+        # カレンダーによる期間選択
         min_d = df_out_all["日時"].min().date()
         max_d = df_out_all["日時"].max().date()
         start_default = max(min_d, max_d - dt.timedelta(days=30))
@@ -97,8 +81,6 @@ if not df_log_raw.empty:
         sel_item = st.selectbox("📦 商品名を選択", all_item_list)
         sel_size = st.selectbox("📏 サイズを選択", all_size_list)
         sel_loc = st.selectbox("📍 地名を選択", all_loc_list)
-
-        show_reservation = st.sidebar.checkbox("📅 出庫予約を含めて分析する", value=False)
         
         exclude_wrapping = st.checkbox("包装紙を除外する", value=False)
         show_compare = st.checkbox("昨年対比を表示する", value=True)
