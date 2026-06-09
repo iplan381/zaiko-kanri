@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -202,5 +201,3 @@ with st.expander(f"👌 完了履歴 (直近{len(done_df.head(30))}件)", expand
         st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
     else:
         st.write("完了した履歴はありません。")
-
-```
