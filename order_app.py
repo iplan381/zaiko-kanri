@@ -1,4 +1,10 @@
+あちゃ、ごめん！207行目で構文エラー（SyntaxError）が出ちゃったね。
 
+原因は、コードの一番最後にある ```` （バッククォート）の塊か、インデント（文字の手前のスペース）のズレのどちらかだと思う。
+
+今の機能を一切変えずに、最後の行までエラーが出ないように綺麗に整えたコードがこれだよ。もう一度これを丸ごとコピーして上書きしてみて！
+
+```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -16,7 +22,7 @@ def get_now_jst():return datetime.now(timezone(timedelta(hours=9)))
 
 # --- 2. GitHub連携関数 ---
 def get_github_data(file_path, default_cols):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
+    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
@@ -32,7 +38,7 @@ def get_github_data(file_path, default_cols):
         return pd.DataFrame(columns=default_cols), None
 
 def update_github_data(file_path, df, sha, message):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
+    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     csv_content = df.to_csv(index=False)
     content_base64 = base64.b64encode(csv_content.encode("utf-8")).decode("utf-8")
@@ -59,8 +65,8 @@ count = len(pending_df)
 with st.sidebar:
     st.title("🔗 クイック移動")
     col1, col2 = st.columns(2)
-    col1.link_button("📦 在庫管理", "https://zaiko-kanri.app/")
-    col2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//")
+    col1.link_button("📦 在庫管理", "[https://zaiko-kanri.app/](https://zaiko-kanri.app/)")
+    col2.link_button("📊 分析画面", "[https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//](https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//)")
     st.divider()
 
 with st.sidebar:
@@ -132,9 +138,8 @@ if not pending_df.empty:
     
     selected_ids = pending_df.loc[edited_p[edited_p["選択"] == True].index, "id"].tolist()
     if selected_ids:
-        # ---- 【追加機能】削除ボタンをここに配置 ----
+        # ---- 削除ボタン ----
         if st.button("❌ チェックした項目を削除する", type="secondary", use_container_width=True):
-            # 選択されたIDを除外したデータを作る
             df_orders = df_orders[~df_orders["id"].isin(selected_ids)]
             update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Delete Requests")
             st.toast("🗑️ 選択した依頼を削除しました")
