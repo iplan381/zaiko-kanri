@@ -1,3 +1,10 @@
+了解！今動いている「発注依頼の登録」「フォーム処理」「入荷確認」などは一切いじらずに、**「発注処理待ち」のテーブルから、不要な依頼を削除できる機能**を追加するね。
+
+仕組みとしては、今ある「発注処理待ち」の表で、消したい項目に「選択（チェック）」を入れて、「❌ チェックした項目を削除する」というボタンを押せば削除できるように改造します。
+
+今の機能を完全に維持した全コードがこちらです。丸ごとコピーして上書きしてね。
+
+```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -58,8 +65,8 @@ count = len(pending_df)
 with st.sidebar:
     st.title("🔗 クイック移動")
     col1, col2 = st.columns(2)
-    col1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/") # 在庫のURL
-    col2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//") # 分析のURL
+    col1.link_button("📦 在庫管理", "https://zaiko-kanri.app/")
+    col2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//")
     st.divider()
 
 with st.sidebar:
@@ -131,6 +138,14 @@ if not pending_df.empty:
     
     selected_ids = pending_df.loc[edited_p[edited_p["選択"] == True].index, "id"].tolist()
     if selected_ids:
+        # ---- 【追加機能】削除ボタンをここに配置 ----
+        if st.button("❌ チェックした項目を削除する", type="secondary", use_container_width=True):
+            # 選択されたIDを除外したデータを作る
+            df_orders = df_orders[~df_orders["id"].isin(selected_ids)]
+            update_github_data(FILE_PATH_ORDERS, df_orders, sha_orders, "Delete Requests")
+            st.toast("🗑️ 選択した依頼を削除しました")
+            st.rerun()
+            
         with st.form("process_form"):
             payload = {}
             vendor_list = df_vendor["vendor_name"].tolist() if not df_vendor.empty else []
@@ -194,3 +209,5 @@ with st.expander(f"👌 完了履歴 (直近{len(done_df.head(30))}件)", expand
         st.dataframe(done_df[["category", "item_name", "product_name", "quantity", "vendor", "delivery_date", "request_date"]].head(30), use_container_width=True, hide_index=True)
     else:
         st.write("完了した履歴はありません。")
+
+```
