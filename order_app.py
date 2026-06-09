@@ -5,7 +5,7 @@ import base64
 from datetime import datetime, timedelta, timezone
 import io
 
-# --- 1. 設定 ---
+# --- 1. 設定（URLバグ防止のため完全に固定） ---
 REPO_NAME = "iplan381/zaiko-kanri"
 FILE_PATH_ORDERS = "order_log.csv"
 FILE_PATH_MASTER = "material_master.csv"
@@ -15,7 +15,8 @@ def get_now_jst():return datetime.now(timezone(timedelta(hours=9)))
 
 # --- 2. GitHub連携関数 ---
 def get_github_data(file_path, default_cols):
-    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){REPO_NAME}/contents/{file_path}"
+    # ここのURL作成で変な文字が混ざらないように厳密に結合
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
@@ -31,7 +32,7 @@ def get_github_data(file_path, default_cols):
         return pd.DataFrame(columns=default_cols), None
 
 def update_github_data(file_path, df, sha, message):
-    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){REPO_NAME}/contents/{file_path}"
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     csv_content = df.to_csv(index=False)
     content_base64 = base64.b64encode(csv_content.encode("utf-8")).decode("utf-8")
@@ -58,8 +59,8 @@ count = len(pending_df)
 with st.sidebar:
     st.title("🔗 クイック移動")
     col1, col2 = st.columns(2)
-    col1.link_button("📦 在庫管理", "[https://zaiko-kanri.app/](https://zaiko-kanri.app/)")
-    col2.link_button("📊 分析画面", "[https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//](https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//)")
+    col1.link_button("📦 在庫管理", "https://zaiko-kanri.app/")
+    col2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//")
     st.divider()
 
 with st.sidebar:
