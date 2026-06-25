@@ -181,29 +181,23 @@ if selected_indices:
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
                 
-                # カレンダーの初期値を「None（空欄）」にする
-                # これにより、翌日だろうがどの日を選ぼうが、必ず「変更された」と検知できる
-                chosen_date = st.date_input(
-                    "予約日をカレンダーから選択（押すと自動追加）", 
-                    value=None, 
-                    key="auto_selector_date",
-                    placeholder="日付を選択してください"
-                )
+                # エラー回避のため初期値はtomorrow(日付)に戻す
+                chosen_date = st.date_input("予約日をカレンダーから選択（押すと自動追加）", value=tomorrow, key="auto_selector_date")
                 
-                # 【自動追加ロジック】
-                # 日付が選択されたら、即座にリストに追加してカレンダーをリセットする
-                if chosen_date is not None:
-                    if chosen_date not in st.session_state.res_dates_list:
-                        st.session_state.res_dates_list.append(chosen_date)
-                        st.session_state.res_dates_list.sort()
-                    
-                    # 連続して同じ日を選んだり、カレンダー表示を「選択してください」に戻すために
-                    # 一度選択されたら入力をクリアして画面を再描画する
+                # 現在カレンダーでロックオンしている日付を表示（これを通すことで変更をStreamlitに強制検知させる）
+                st.info(f"現在選択中の日付: {chosen_date}")
+                
+                # 【新・自動追加ロジック】
+                # infoに表示されている日付をリストに追加するためのトリガーボタン代わりに、
+                # まだリストにない日付が選ばれていたら即座に追加してrerunする
+                if chosen_date and chosen_date not in st.session_state.res_dates_list:
+                    st.session_state.res_dates_list.append(chosen_date)
+                    st.session_state.res_dates_list.sort()
                     st.rerun()
                 
                 # 選択中の日付リスト（×ボタンで個別に消せる）
                 if st.session_state.res_dates_list:
-                    st.write("選択中の日付（クリックで削除）:")
+                    st.write("確定した予約日程（クリックで削除）:")
                     cols_dates = st.columns(len(st.session_state.res_dates_list) + 1)
                     for d_idx, d in enumerate(st.session_state.res_dates_list):
                         with cols_dates[d_idx]:
