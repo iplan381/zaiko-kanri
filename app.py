@@ -174,8 +174,12 @@ if selected_indices:
         with cc1:
             bulk_type = st.radio("操作区分を一括変更", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True)
         with cc2:
-            is_not_res = (bulk_type != "予約出庫")
-            bulk_date = st.date_input("共通の予約日", value=dt.date.today() + dt.timedelta(days=1), disabled=is_not_res)
+            is_res = (bulk_type == "予約出庫")
+            if is_res:
+                # 予約出庫の時は複数日程を選択できるようにする
+                bulk_dates = st.date_input("共通の予約日（複数選択可）", value=[dt.date.today() + dt.timedelta(days=1)], mode="multi")
+            else:
+                bulk_date = st.date_input("共通の予約日", value=dt.date.today() + dt.timedelta(days=1), disabled=True)
         with cc3:
             user_name = st.selectbox("担当者", ["-- 選択 --"] + USERS)
 
@@ -183,50 +187,72 @@ if selected_indices:
         update_payload = {}
         for i, row in selected_data_list.iterrows():
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
-                col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
-                with col1:
-                    st.info(f"区分: {bulk_type}")
-                with col2:
-                    # 調整も含め、基本は0スタート。調整時はマイナス入力で減算させる。
-                    m_qty = st.number_input("数量", min_value=-10000, value=0, key=f"qty_{i}")
-                with col3:
-                    if bulk_type == "予約出庫":
-                        res_date = bulk_date
-                        st.write(f"予定: {res_date}")
-                        new_loc = row['地名']
-                    else:
+                # 予約出庫とそれ以外でレイアウトを分ける
+                if bulk_type == "予約出庫":
+                    col1, col2, col3 = st.columns([1.5, 2, 0.6])
+                    with col1:
+                        st.info(f"区分: {bulk_type}")
+                    with col2:
+                        res_data_list = []
+                        # 選択された日付ごとに数量入力欄を作る
+                        if isinstance(bulk_dates, list) and len(bulk_dates) > 0:
+                            for d_idx, d in enumerate(bulk_dates):
+                                r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d_idx}")
+                                if r_qty > 0:
+                                    res_data_list.append({"res_date": d, "qty": r_qty})
+                        else:
+                            st.warning("上のカレンダーで日付を選択してください")
+                    with col3:
+                        is_delete = st.checkbox("削除", key=f"del_{i}")
+                    
+                    update_payload[i] = {
+                        "type": bulk_type, "res_data_list": res_data_list, "loc": row['地名'], 
+                        "alert": int(row['アラート基準']), "delete": is_delete, "orig_data": row
+                    }
+                else:
+                    # 入庫・出庫・調整（従来どおりの動き）
+                    col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
+                    with col1:
+                        st.info(f"区分: {bulk_type}")
+                    with col2:
+                        m_qty = st.number_input("数量", min_value=-10000, value=0, key=f"qty_{i}")
+                    with col3:
                         new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
-                        res_date = None
-                with col4:
-                    new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
-                with col5:
-                    is_delete = st.checkbox("削除", key=f"del_{i}")
-                
-                update_payload[i] = {
-                    "type": bulk_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, 
-                    "delete": is_delete, "res_date": res_date, "orig_data": row
-                }
+                    with col4:
+                        new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
+                    with col5:
+                        is_delete = st.checkbox("削除", key=f"del_{i}")
+                    
+                    update_payload[i] = {
+                        "type": bulk_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, 
+                        "delete": is_delete, "orig_data": row
+                    }
 
         # --- 確定画面（ポップオーバー） ---
         with st.popover("✅ 内容を確認して確定", use_container_width=True):
             st.markdown(f"### ⚠️ 以下の内容で確定しますか？")
             
             summary_list = []
+            has_changes = False
+            
             for idx, p in update_payload.items():
                 row = p["orig_data"]
-                item_detail = f"{row['商品名']}　({row['サイズ']})　{row['地名']}　数量：{p['qty']}"
-                
                 if p["delete"]:
-                    summary_list.append(f"🔥 **削除**: {row['商品名']}　({row['サイズ']})　{row['地名']}")
-                elif p["qty"] != 0 or p["loc"] != row["地名"]:
-                    if p["type"] == "予約出庫":
-                        summary_list.append(f"📅 **{p['type']}**: {item_detail} (予約日:{p['res_date']})")
-                    else:
-                        current_item = f"{row['商品名']}　({row['サイズ']})　{p['loc']}　数量：{p['qty']}"
+                    summary_list.append(f"🔥 **削除**: {row['商品名']} ({row['サイズ']}) {row['地名']}")
+                    has_changes = True
+                elif p["type"] == "予約出庫":
+                    if p["res_data_list"]:
+                        has_changes = True
+                        for res_item in p["res_data_list"]:
+                            summary_list.append(f"📅 **予約出庫**: {row['商品名']} ({row['サイズ']}) {row['地名']} 数量：{res_item['qty']} (予約日:{res_item['res_date']})")
+                else:
+                    if p["qty"] != 0 or p["loc"] != row["地名"]:
+                        has_changes = True
+                        current_item = f"{row['商品名']} ({row['サイズ']}) {p['loc']} 数量：{p['qty']}"
                         loc_change = f" (地名変更: {row['地名']} → {p['loc']})" if p["loc"] != row["地名"] else ""
                         summary_list.append(f"📝 **{p['type']}**: {current_item}{loc_change}")
             
-            if summary_list:
+            if has_changes:
                 for item in summary_list:
                     st.write(item)
                 st.divider()
@@ -248,17 +274,18 @@ if selected_indices:
                             new_df_stock = new_df_stock.drop(target_idx)
                         else:
                             if p["type"] == "予約出庫":
-                                res_row = pd.DataFrame([{"予約日": str(p["res_date"]), "商品名": row["商品名"], "サイズ": row["サイズ"], "地名": row["地名"], "数量": p["qty"], "担当者": user_name}])
-                                new_reservations = pd.concat([new_reservations, res_row], ignore_index=True)
+                                # 日付ごとに予約データをバラして追加する
+                                for res_item in p["res_data_list"]:
+                                    res_row = pd.DataFrame([{
+                                        "予約日": str(res_item["res_date"]), "商品名": row["商品名"], 
+                                        "サイズ": row["サイズ"], "地名": row["地名"], 
+                                        "数量": res_item["qty"], "担当者": user_name
+                                    }])
+                                    new_reservations = pd.concat([new_reservations, res_row], ignore_index=True)
                             else:
-                                # --- 数量計算（調整も加算・減算にする） ---
-                                if p["type"] == "入庫":
-                                    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
-                                elif p["type"] == "出庫":
-                                    new_df_stock.at[target_idx, "在庫数"] -= p["qty"]
-                                elif p["type"] == "調整":
-                                    # 調整も現在の在庫に対して数値を足し引きする
-                                    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
+                                if p["type"] == "入庫":      new_df_stock.at[target_idx, "在庫数"] += p["qty"]
+                                elif p["type"] == "出庫":    new_df_stock.at[target_idx, "在庫数"] -= p["qty"]
+                                elif p["type"] == "調整":    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
                                 
                                 new_df_stock.at[target_idx, "地名"] = p["loc"]
                                 new_df_stock.at[target_idx, "アラート基準"] = p["alert"]
