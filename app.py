@@ -178,9 +178,9 @@ if selected_indices:
             tomorrow = dt.date.today() + dt.timedelta(days=1)
             
             if is_res:
-                # セッション状態（画面が切り替わってもデータを保持する仕組み）で日付リストを管理
+                # 初期値を「空っぽのリスト」にする
                 if "res_dates_list" not in st.session_state:
-                    st.session_state.res_dates_list = [tomorrow]
+                    st.session_state.res_dates_list = []
                 
                 # 日付を選ぶカレンダーと追加ボタン
                 c_date, c_btn = st.columns([1.5, 1])
@@ -194,13 +194,22 @@ if selected_indices:
                             st.session_state.res_dates_list.append(add_date)
                             st.session_state.res_dates_list.sort()
                 
-                # 現在選択されているバラバラの日付をタグ表示（クリックで消せるようにするとベストだけど、まずは確認用）
-                st.write("選択中の日付:", [str(d) for d in st.session_state.res_dates_list])
-                
-                # リセットボタンも配置
-                if st.button("🔄 日付をクリア", type="secondary"):
-                    st.session_state.res_dates_list = [tomorrow]
-                    st.rerun()
+                # 選択中の日付リスト（×ボタンで個別に消せるようにアップデート）
+                if st.session_state.res_dates_list:
+                    st.write("選択中の日付（クリックで削除）:")
+                    # 日付を横並びに並べて、クリックで削除できるようにする
+                    cols_dates = st.columns(len(st.session_state.res_dates_list) + 1)
+                    for d_idx, d in enumerate(st.session_state.res_dates_list):
+                        with cols_dates[d_idx]:
+                            if st.button(f"❌ {d}", key=f"del_date_btn_{d_idx}", type="secondary"):
+                                st.session_state.res_dates_list.remove(d)
+                                st.rerun()
+                    with cols_dates[-1]:
+                        if st.button("🔄 全クリア", type="primary"):
+                            st.session_state.res_dates_list = []
+                            st.rerun()
+                else:
+                    st.caption("※上のボタンから予約したい日付を追加してください。")
             else:
                 st.date_input("共通の予約日", value=tomorrow, disabled=True)
                 
@@ -217,11 +226,14 @@ if selected_indices:
                         st.info(f"区分: {bulk_type}")
                     with col2:
                         res_data_list = []
-                        # 追加されたバラバラの日付ループ
-                        for d_idx, d in enumerate(st.session_state.res_dates_list):
-                            r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d}_{d_idx}")
-                            if r_qty > 0:
-                                res_data_list.append({"res_date": d, "qty": r_qty})
+                        # 日付が選択されている場合のみ入力欄を表示
+                        if st.session_state.get("res_dates_list"):
+                            for d_idx, d in enumerate(st.session_state.res_dates_list):
+                                r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d}_{d_idx}")
+                                if r_qty > 0:
+                                    res_data_list.append({"res_date": d, "qty": r_qty})
+                        else:
+                            st.warning("予約日が選択されていません。上の一括設定から日付を追加してください。")
                     with col3:
                         is_delete = st.checkbox("削除", key=f"del_{i}")
                     
@@ -319,9 +331,9 @@ if selected_indices:
                     if update_github_data(FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update") and \
                        update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Add Log") and \
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
-                        # 成功したらセッションの予約日リストもリセット
+                        # 成功したら日付リストをクリア
                         if "res_dates_list" in st.session_state:
-                            del st.session_state.res_dates_list
+                            st.session_state.res_dates_list = []
                         st.success("完了！")
                         st.rerun()
             else:
