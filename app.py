@@ -178,26 +178,23 @@ if selected_indices:
             tomorrow = dt.date.today() + dt.timedelta(days=1)
             
             if is_res:
-                # 初期値を「空っぽのリスト」にする
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
                 
-                # 日付を選ぶカレンダーと追加ボタン
-                c_date, c_btn = st.columns([1.5, 1])
-                with c_date:
-                    add_date = st.date_input("予約日を選択", value=tomorrow, key="selector_date")
-                with c_btn:
-                    st.write("") # 位置調整用の空行
-                    st.write("") 
-                    if st.button("➕ 日付を追加", use_container_width=True):
-                        if add_date not in st.session_state.res_dates_list:
-                            st.session_state.res_dates_list.append(add_date)
-                            st.session_state.res_dates_list.sort()
+                # 日付カレンダー（選択されたら即座に下の処理が走る）
+                # keyを変更することで、選択後に一時的に値を保持させない工夫をする
+                chosen_date = st.date_input("予約日をカレンダーから選択（押すと自動追加）", value=tomorrow, key="auto_selector_date")
                 
-                # 選択中の日付リスト（×ボタンで個別に消せるようにアップデート）
+                # 【自動追加ロジック】
+                # 前回選んだ日付と違うものがクリックされたら、自動でリストに加える
+                if chosen_date and chosen_date not in st.session_state.res_dates_list:
+                    st.session_state.res_dates_list.append(chosen_date)
+                    st.session_state.res_dates_list.sort()
+                    st.rerun() # 画面を即時更新して数量入力欄を増やす
+                
+                # 選択中の日付リスト（×ボタンで個別に消せる）
                 if st.session_state.res_dates_list:
                     st.write("選択中の日付（クリックで削除）:")
-                    # 日付を横並びに並べて、クリックで削除できるようにする
                     cols_dates = st.columns(len(st.session_state.res_dates_list) + 1)
                     for d_idx, d in enumerate(st.session_state.res_dates_list):
                         with cols_dates[d_idx]:
@@ -209,7 +206,7 @@ if selected_indices:
                             st.session_state.res_dates_list = []
                             st.rerun()
                 else:
-                    st.caption("※上のボタンから予約したい日付を追加してください。")
+                    st.caption("※上のカレンダーから予約したい日付をタップしていってください。")
             else:
                 st.date_input("共通の予約日", value=tomorrow, disabled=True)
                 
@@ -226,14 +223,13 @@ if selected_indices:
                         st.info(f"区分: {bulk_type}")
                     with col2:
                         res_data_list = []
-                        # 日付が選択されている場合のみ入力欄を表示
                         if st.session_state.get("res_dates_list"):
                             for d_idx, d in enumerate(st.session_state.res_dates_list):
                                 r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d}_{d_idx}")
                                 if r_qty > 0:
                                     res_data_list.append({"res_date": d, "qty": r_qty})
                         else:
-                            st.warning("予約日が選択されていません。上の一括設定から日付を追加してください。")
+                            st.warning("予約日が選択されていません。上のカレンダーから日付を選んでください。")
                     with col3:
                         is_delete = st.checkbox("削除", key=f"del_{i}")
                     
@@ -331,7 +327,6 @@ if selected_indices:
                     if update_github_data(FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update") and \
                        update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Add Log") and \
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
-                        # 成功したら日付リストをクリア
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []
                         st.success("完了！")
