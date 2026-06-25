@@ -180,23 +180,25 @@ if selected_indices:
             if is_res:
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
-                if "last_chosen_date" not in st.session_state:
-                    st.session_state.last_chosen_date = None
                 
-                # カレンダーを表示
-                chosen_date = st.date_input("予約日をカレンダーから選択（押すと自動追加）", value=tomorrow, key="auto_selector_date")
+                # カレンダーの初期値を「None（空欄）」にする
+                # これにより、翌日だろうがどの日を選ぼうが、必ず「変更された」と検知できる
+                chosen_date = st.date_input(
+                    "予約日をカレンダーから選択（押すと自動追加）", 
+                    value=None, 
+                    key="auto_selector_date",
+                    placeholder="日付を選択してください"
+                )
                 
                 # 【自動追加ロジック】
-                if chosen_date != st.session_state.last_chosen_date:
+                # 日付が選択されたら、即座にリストに追加してカレンダーをリセットする
+                if chosen_date is not None:
                     if chosen_date not in st.session_state.res_dates_list:
-                        # 初回起動時に初期値が勝手に入るのを防ぐ
-                        if len(st.session_state.res_dates_list) == 0 and chosen_date == tomorrow and st.session_state.last_chosen_date is None:
-                            pass
-                        else:
-                            st.session_state.res_dates_list.append(chosen_date)
-                            st.session_state.res_dates_list.sort()
+                        st.session_state.res_dates_list.append(chosen_date)
+                        st.session_state.res_dates_list.sort()
                     
-                    st.session_state.last_chosen_date = chosen_date
+                    # 連続して同じ日を選んだり、カレンダー表示を「選択してください」に戻すために
+                    # 一度選択されたら入力をクリアして画面を再描画する
                     st.rerun()
                 
                 # 選択中の日付リスト（×ボタンで個別に消せる）
@@ -211,7 +213,6 @@ if selected_indices:
                     with cols_dates[-1]:
                         if st.button("🔄 全クリア", type="primary"):
                             st.session_state.res_dates_list = []
-                            st.session_state.last_chosen_date = None
                             st.rerun()
                 else:
                     st.caption("※上のカレンダーを開いて、予約したい日付をタップしてください。")
@@ -337,8 +338,6 @@ if selected_indices:
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []
-                        if "last_chosen_date" in st.session_state:
-                            st.session_state.last_chosen_date = None
                         st.success("完了！")
                         st.rerun()
             else:
