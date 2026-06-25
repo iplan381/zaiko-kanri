@@ -180,28 +180,21 @@ if selected_indices:
             if is_res:
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
-                if "prev_chosen_date" not in st.session_state:
-                    st.session_state.prev_chosen_date = tomorrow
                 
-                # カレンダーを表示
-                chosen_date = st.date_input("予約日をカレンダーから選択（もう一度押すと削除）", value=st.session_state.prev_chosen_date, key="auto_selector_date")
+                # カレンダーと追加ボタンを横並びにする
+                c_date, c_btn = st.columns([3, 1])
+                with c_date:
+                    chosen_date = st.date_input("予約日をカレンダーから選択", value=tomorrow, key="auto_selector_date")
+                with c_btn:
+                    st.write("") # 上の余白調整
+                    st.write("") 
+                    if st.button("➕ 追加", use_container_width=True, type="secondary"):
+                        if chosen_date not in st.session_state.res_dates_list:
+                            st.session_state.res_dates_list.append(chosen_date)
+                            st.session_state.res_dates_list.sort()
+                            st.rerun()
                 
-                # 【トグル式・自動追加＆削除ロジック】
-                # 前回から日付が変わった瞬間だけ処理する
-                if chosen_date != st.session_state.prev_chosen_date:
-                    if chosen_date in st.session_state.res_dates_list:
-                        # すでにリストにある日を選んだら「削除」
-                        st.session_state.res_dates_list.remove(chosen_date)
-                    else:
-                        # リストにない日を選んだら「追加」
-                        st.session_state.res_dates_list.append(chosen_date)
-                        st.session_state.res_dates_list.sort()
-                    
-                    # 状態を保存して、カレンダーの基準値をリセットするために再描画
-                    st.session_state.prev_chosen_date = chosen_date
-                    st.rerun()
-                
-                # 選択中の日付リスト表示（ボタンクリックでも消せるように残すけど、カレンダー選択でも消せる）
+                # 選択中の日付リスト（❌ボタンで個別にサクッと消せる）
                 if st.session_state.res_dates_list:
                     st.write("選択中の予約日程（クリックで削除）:")
                     cols_dates = st.columns(len(st.session_state.res_dates_list) + 1)
@@ -209,14 +202,13 @@ if selected_indices:
                         with cols_dates[d_idx]:
                             if st.button(f"❌ {d}", key=f"del_date_btn_{d_idx}", type="secondary"):
                                 st.session_state.res_dates_list.remove(d)
-                                # カレンダーの初期表示と被らないように調整
                                 st.rerun()
                     with cols_dates[-1]:
                         if st.button("🔄 全クリア", type="primary"):
                             st.session_state.res_dates_list = []
                             st.rerun()
                 else:
-                    st.caption("※上のカレンダーを開いて、予約したい日付をタップしてください。")
+                    st.caption("※上のカレンダーで日付を選んで、[➕ 追加] を押してください。")
             else:
                 st.date_input("共通の予約日", value=tomorrow, disabled=True)
                 
@@ -239,7 +231,7 @@ if selected_indices:
                                 if r_qty > 0:
                                     res_data_list.append({"res_date": d, "qty": r_qty})
                         else:
-                            st.warning("予約日が選択されていません。上のカレンダーから日付を選んでください。")
+                            st.warning("予約日が選択されていません。上のカレンダーから日付を選んで追加してください。")
                     with col3:
                         is_delete = st.checkbox("削除", key=f"del_{i}")
                     
@@ -339,8 +331,6 @@ if selected_indices:
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []
-                        if "prev_chosen_date" in st.session_state:
-                            st.session_state.prev_chosen_date = tomorrow
                         st.success("完了！")
                         st.rerun()
             else:
