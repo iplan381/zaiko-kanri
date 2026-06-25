@@ -176,8 +176,9 @@ if selected_indices:
         with cc2:
             is_res = (bulk_type == "予約出庫")
             if is_res:
-                # 予約出庫の時は複数日程を選択できるようにする
-                bulk_dates = st.date_input("共通の予約日（複数選択可）", value=[dt.date.today() + dt.timedelta(days=1)], mode="multi")
+                # 初期値として今日と明日をリストで渡すことで、複数選択（期間・複数日）モードを起動する
+                tomorrow = dt.date.today() + dt.timedelta(days=1)
+                bulk_dates = st.date_input("共通の予約日（複数選択可）", value=[tomorrow, tomorrow])
             else:
                 bulk_date = st.date_input("共通の予約日", value=dt.date.today() + dt.timedelta(days=1), disabled=True)
         with cc3:
@@ -187,16 +188,17 @@ if selected_indices:
         update_payload = {}
         for i, row in selected_data_list.iterrows():
             with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
-                # 予約出庫とそれ以外でレイアウトを分ける
                 if bulk_type == "予約出庫":
                     col1, col2, col3 = st.columns([1.5, 2, 0.6])
                     with col1:
                         st.info(f"区分: {bulk_type}")
                     with col2:
                         res_data_list = []
-                        # 選択された日付ごとに数量入力欄を作る
-                        if isinstance(bulk_dates, list) and len(bulk_dates) > 0:
-                            for d_idx, d in enumerate(bulk_dates):
+                        # カレンダーで選択された日付（タプルやリストで返ってくる）をループ処理
+                        if isinstance(bulk_dates, (list, tuple)) and len(bulk_dates) > 0:
+                            # 重複を除外してソート
+                            unique_dates = sorted(list(set(bulk_dates)))
+                            for d_idx, d in enumerate(unique_dates):
                                 r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d_idx}")
                                 if r_qty > 0:
                                     res_data_list.append({"res_date": d, "qty": r_qty})
@@ -210,7 +212,7 @@ if selected_indices:
                         "alert": int(row['アラート基準']), "delete": is_delete, "orig_data": row
                     }
                 else:
-                    # 入庫・出庫・調整（従来どおりの動き）
+                    # 入庫・出庫・調整
                     col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 1, 0.6])
                     with col1:
                         st.info(f"区分: {bulk_type}")
@@ -274,7 +276,6 @@ if selected_indices:
                             new_df_stock = new_df_stock.drop(target_idx)
                         else:
                             if p["type"] == "予約出庫":
-                                # 日付ごとに予約データをバラして追加する
                                 for res_item in p["res_data_list"]:
                                     res_row = pd.DataFrame([{
                                         "予約日": str(res_item["res_date"]), "商品名": row["商品名"], 
