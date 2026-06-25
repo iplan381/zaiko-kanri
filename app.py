@@ -180,35 +180,24 @@ if selected_indices:
             if is_res:
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
-                # 前回選んだ日付を追跡する変数を初期化
                 if "last_chosen_date" not in st.session_state:
                     st.session_state.last_chosen_date = None
                 
                 # カレンダーを表示
                 chosen_date = st.date_input("予約日をカレンダーから選択（押すと自動追加）", value=tomorrow, key="auto_selector_date")
                 
-                # 【自動追加ロジックの修正】
-                # 「前回と違う日付が選ばれた」かつ「それが初期値（tomorrow）の自動読み込みではない（または初回操作）」場合のみ追加
+                # 【自動追加ロジック】
                 if chosen_date != st.session_state.last_chosen_date:
-                    # 初回起動時に初期値が勝手に入るのを防ぐため、明示的に変更されたか、リストにまだない場合のみ
                     if chosen_date not in st.session_state.res_dates_list:
-                        # 完全に初回（リストが空）で、かつ選ばれたのが初期値のままであればスルーする（ユーザーが触ってない証拠）
+                        # 初回起動時に初期値が勝手に入るのを防ぐ
                         if len(st.session_state.res_dates_list) == 0 and chosen_date == tomorrow and st.session_state.last_chosen_date is None:
                             pass
                         else:
                             st.session_state.res_dates_list.append(chosen_date)
                             st.session_state.res_dates_list.sort()
                     
-                    # 最後に選んだ日付を更新して rerun
                     st.session_state.last_chosen_date = chosen_date
                     st.rerun()
-                
-                # ユーザーがカレンダーの初期値（明日）を「あえて最初の1日目として追加したい」ときのために、手動追加ボタンも小さく残しておく
-                if tomorrow not in st.session_state.res_dates_list:
-                    if st.button(f"📅 明日（{tomorrow}）を予約日に含める", type="secondary"):
-                        st.session_state.res_dates_list.append(tomorrow)
-                        st.session_state.res_dates_list.sort()
-                        st.rerun()
                 
                 # 選択中の日付リスト（×ボタンで個別に消せる）
                 if st.session_state.res_dates_list:
@@ -222,7 +211,6 @@ if selected_indices:
                     with cols_dates[-1]:
                         if st.button("🔄 全クリア", type="primary"):
                             st.session_state.res_dates_list = []
-                            # クリアした時はlast_chosen_dateもリセットしないと無限ループになる
                             st.session_state.last_chosen_date = None
                             st.rerun()
                 else:
