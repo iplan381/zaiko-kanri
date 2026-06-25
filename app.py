@@ -170,17 +170,40 @@ if selected_indices:
     # --- 1. 共通設定 ---
     with st.container(border=True):
         st.markdown("**⚡ 全選択データへの共通設定**")
-        cc1, cc2, cc3 = st.columns([1.5, 1, 1])
+        cc1, cc2, cc3 = st.columns([1.5, 1.5, 1])
         with cc1:
             bulk_type = st.radio("操作区分を一括変更", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True)
         with cc2:
             is_res = (bulk_type == "予約出庫")
+            tomorrow = dt.date.today() + dt.timedelta(days=1)
+            
             if is_res:
-                # 初期値として今日と明日をリストで渡すことで、複数選択（期間・複数日）モードを起動する
-                tomorrow = dt.date.today() + dt.timedelta(days=1)
-                bulk_dates = st.date_input("共通の予約日（複数選択可）", value=[tomorrow, tomorrow])
+                # セッション状態（画面が切り替わってもデータを保持する仕組み）で日付リストを管理
+                if "res_dates_list" not in st.session_state:
+                    st.session_state.res_dates_list = [tomorrow]
+                
+                # 日付を選ぶカレンダーと追加ボタン
+                c_date, c_btn = st.columns([1.5, 1])
+                with c_date:
+                    add_date = st.date_input("予約日を選択", value=tomorrow, key="selector_date")
+                with c_btn:
+                    st.write("") # 位置調整用の空行
+                    st.write("") 
+                    if st.button("➕ 日付を追加", use_container_width=True):
+                        if add_date not in st.session_state.res_dates_list:
+                            st.session_state.res_dates_list.append(add_date)
+                            st.session_state.res_dates_list.sort()
+                
+                # 現在選択されているバラバラの日付をタグ表示（クリックで消せるようにするとベストだけど、まずは確認用）
+                st.write("選択中の日付:", [str(d) for d in st.session_state.res_dates_list])
+                
+                # リセットボタンも配置
+                if st.button("🔄 日付をクリア", type="secondary"):
+                    st.session_state.res_dates_list = [tomorrow]
+                    st.rerun()
             else:
-                bulk_date = st.date_input("共通の予約日", value=dt.date.today() + dt.timedelta(days=1), disabled=True)
+                st.date_input("共通の予約日", value=tomorrow, disabled=True)
+                
         with cc3:
             user_name = st.selectbox("担当者", ["-- 選択 --"] + USERS)
 
@@ -194,16 +217,11 @@ if selected_indices:
                         st.info(f"区分: {bulk_type}")
                     with col2:
                         res_data_list = []
-                        # カレンダーで選択された日付（タプルやリストで返ってくる）をループ処理
-                        if isinstance(bulk_dates, (list, tuple)) and len(bulk_dates) > 0:
-                            # 重複を除外してソート
-                            unique_dates = sorted(list(set(bulk_dates)))
-                            for d_idx, d in enumerate(unique_dates):
-                                r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d_idx}")
-                                if r_qty > 0:
-                                    res_data_list.append({"res_date": d, "qty": r_qty})
-                        else:
-                            st.warning("上のカレンダーで日付を選択してください")
+                        # 追加されたバラバラの日付ループ
+                        for d_idx, d in enumerate(st.session_state.res_dates_list):
+                            r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d}_{d_idx}")
+                            if r_qty > 0:
+                                res_data_list.append({"res_date": d, "qty": r_qty})
                     with col3:
                         is_delete = st.checkbox("削除", key=f"del_{i}")
                     
@@ -301,6 +319,9 @@ if selected_indices:
                     if update_github_data(FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update") and \
                        update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Add Log") and \
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
+                        # 成功したらセッションの予約日リストもリセット
+                        if "res_dates_list" in st.session_state:
+                            del st.session_state.res_dates_list
                         st.success("完了！")
                         st.rerun()
             else:
