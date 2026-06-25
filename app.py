@@ -180,29 +180,36 @@ if selected_indices:
             if is_res:
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
+                if "prev_chosen_date" not in st.session_state:
+                    st.session_state.prev_chosen_date = tomorrow
                 
-                # エラー回避のため初期値はtomorrow(日付)に戻す
-                chosen_date = st.date_input("予約日をカレンダーから選択（押すと自動追加）", value=tomorrow, key="auto_selector_date")
+                # カレンダーを表示
+                chosen_date = st.date_input("予約日をカレンダーから選択（もう一度押すと削除）", value=st.session_state.prev_chosen_date, key="auto_selector_date")
                 
-                # 現在カレンダーでロックオンしている日付を表示（これを通すことで変更をStreamlitに強制検知させる）
-                st.info(f"現在選択中の日付: {chosen_date}")
-                
-                # 【新・自動追加ロジック】
-                # infoに表示されている日付をリストに追加するためのトリガーボタン代わりに、
-                # まだリストにない日付が選ばれていたら即座に追加してrerunする
-                if chosen_date and chosen_date not in st.session_state.res_dates_list:
-                    st.session_state.res_dates_list.append(chosen_date)
-                    st.session_state.res_dates_list.sort()
+                # 【トグル式・自動追加＆削除ロジック】
+                # 前回から日付が変わった瞬間だけ処理する
+                if chosen_date != st.session_state.prev_chosen_date:
+                    if chosen_date in st.session_state.res_dates_list:
+                        # すでにリストにある日を選んだら「削除」
+                        st.session_state.res_dates_list.remove(chosen_date)
+                    else:
+                        # リストにない日を選んだら「追加」
+                        st.session_state.res_dates_list.append(chosen_date)
+                        st.session_state.res_dates_list.sort()
+                    
+                    # 状態を保存して、カレンダーの基準値をリセットするために再描画
+                    st.session_state.prev_chosen_date = chosen_date
                     st.rerun()
                 
-                # 選択中の日付リスト（×ボタンで個別に消せる）
+                # 選択中の日付リスト表示（ボタンクリックでも消せるように残すけど、カレンダー選択でも消せる）
                 if st.session_state.res_dates_list:
-                    st.write("確定した予約日程（クリックで削除）:")
+                    st.write("選択中の予約日程（クリックで削除）:")
                     cols_dates = st.columns(len(st.session_state.res_dates_list) + 1)
                     for d_idx, d in enumerate(st.session_state.res_dates_list):
                         with cols_dates[d_idx]:
                             if st.button(f"❌ {d}", key=f"del_date_btn_{d_idx}", type="secondary"):
                                 st.session_state.res_dates_list.remove(d)
+                                # カレンダーの初期表示と被らないように調整
                                 st.rerun()
                     with cols_dates[-1]:
                         if st.button("🔄 全クリア", type="primary"):
@@ -332,6 +339,8 @@ if selected_indices:
                        update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []
+                        if "prev_chosen_date" in st.session_state:
+                            st.session_state.prev_chosen_date = tomorrow
                         st.success("完了！")
                         st.rerun()
             else:
