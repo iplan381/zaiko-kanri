@@ -9,7 +9,7 @@ def get_now_jst():
     return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 # --- 1. 設定 ---
-REPO_NAME = "iplan381/zaiko-kanri" 
+REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri")
 FILE_PATH_STOCK = "inventory_main.csv"
 FILE_PATH_LOG = "stock_log_main.csv"
 FILE_PATH_RESERVATION = "reservations_main.csv"
