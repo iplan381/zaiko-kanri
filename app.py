@@ -1,12 +1,16 @@
 import streamlit as st
 import pandas as pd
-import datetime as dt 
+import datetime as dt
 import base64
 import requests
 from io import StringIO
 
+
 def get_now_jst():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
 
 # --- 1. 設定 ---
 REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri")
@@ -17,9 +21,10 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 SIZES_MASTER = ["大", "中", "小", "4個入", " - "]
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
-USERS = ["佐藤", "手塚"]
+USERS = ["佐藤", "中村", "手塚"]
 
 st.set_page_config(page_title="在庫管理システム", layout="wide")
+
 
 # --- 2. GitHub関数 ---
 def get_github_data(file_path):
@@ -33,6 +38,7 @@ def get_github_data(file_path):
         return df.fillna(""), content["sha"]
     return pd.DataFrame(), None
 
+
 def update_github_data(file_path, df, sha, message):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -40,54 +46,80 @@ def update_github_data(file_path, df, sha, message):
     data = {
         "message": message,
         "content": base64.b64encode(csv_content.encode("utf-8")).decode("utf-8"),
-        "sha": sha
+        "sha": sha,
     }
     res = requests.put(url, headers=headers, json=data)
     return res.status_code == 200
 
+
 # 予約を自動処理する関数
 def process_reservations(df_stock, sha_stock, df_log, sha_log):
     df_res, sha_res = get_github_data(FILE_PATH_RESERVATION)
-    if df_res.empty: return df_stock, df_log
+    if df_res.empty:
+        return df_stock, df_log
     today = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
     df_res["予約日_dt"] = pd.to_datetime(df_res["予約日"]).dt.date
     to_process = df_res[df_res["予約日_dt"] <= today]
     if not to_process.empty:
         new_logs = []
         for _, row in to_process.iterrows():
-            mask = (df_stock["商品名"] == row["商品名"]) & (df_stock["サイズ"] == row["サイズ"]) & (df_stock["地名"] == row["地名"])
+            mask = (
+                (df_stock["商品名"] == row["商品名"])
+                & (df_stock["サイズ"] == row["サイズ"])
+                & (df_stock["地名"] == row["地名"])
+            )
             if mask.any():
                 idx = df_stock[mask].index[0]
                 df_stock.at[idx, "在庫数"] -= row["数量"]
                 df_stock.at[idx, "最終更新日"] = get_now_jst()
-                new_logs.append({
-                    "日時": get_now_jst(), "商品名": row["商品名"], "サイズ": row["サイズ"], 
-                    "地名": row["地名"], "区分": "出庫(予約実行)", "数量": row["数量"], 
-                    "在庫数": df_stock.at[idx, "在庫数"], "担当者": row["担当者"]
-                })
+                new_logs.append(
+                    {
+                        "日時": get_now_jst(),
+                        "商品名": row["商品名"],
+                        "サイズ": row["サイズ"],
+                        "地名": row["地名"],
+                        "区分": "出庫(予約実行)",
+                        "数量": row["数量"],
+                        "在庫数": df_stock.at[idx, "在庫数"],
+                        "担当者": row["担当者"],
+                    }
+                )
         df_res_remain = df_res[df_res["予約日_dt"] > today].drop(columns=["予約日_dt"])
-        update_github_data(FILE_PATH_STOCK, df_stock, sha_stock, "Auto Reservation Exec")
-        update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Auto Res Log")
-        update_github_data(FILE_PATH_RESERVATION, df_res_remain, sha_res, "Clean up Reservation")
+        update_github_data(
+            FILE_PATH_STOCK, df_stock, sha_stock, "Auto Reservation Exec"
+        )
+        update_github_data(
+            FILE_PATH_LOG,
+            pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True),
+            sha_log,
+            "Auto Res Log",
+        )
+        update_github_data(
+            FILE_PATH_RESERVATION, df_res_remain, sha_res, "Clean up Reservation"
+        )
         st.success(f"📢 本日の出庫予約を在庫に反映しました")
         st.rerun()
     return df_stock, df_log
+
 
 def get_opts(series):
     items = sorted([str(x) for x in series.unique() if str(x).strip() != ""])
     return ["すべて"] + items
 
+
 def highlight_res_alert(row):
-    styles = [''] * len(row)
+    styles = [""] * len(row)
     if "出荷後在庫" in row.index and row["出荷後在庫"] < 0:
-        return ['background-color: #d9534f; color: white'] * len(row)
+        return ["background-color: #d9534f; color: white"] * len(row)
     return styles
 
+
 def highlight_alert(row):
-    styles = [''] * len(row)
+    styles = [""] * len(row)
     if "有効在庫" in row.index and row["有効在庫"] < row["アラート基準"]:
-        return ['background-color: #d9534f; color: white'] * len(row)
+        return ["background-color: #d9534f; color: white"] * len(row)
     return styles
+
 
 # データ読み込み
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
@@ -98,11 +130,15 @@ df_stock, df_log = process_reservations(df_stock, sha_stock, df_log, sha_log)
 # --- 3. サイドバー：新規商品登録 ---
 
 with st.sidebar:
-        st.markdown("### 🔗 クイック移動")
-        c1, c2 = st.columns(2)
-        c1.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//")
-        c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
-        st.divider()
+    st.markdown("### 🔗 クイック移動")
+    c1, c2 = st.columns(2)
+    c1.link_button(
+        "📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//"
+    )
+    c2.link_button(
+        "🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/"
+    )
+    st.divider()
 
 with st.sidebar:
     st.header("✨ 新規商品登録")
@@ -111,18 +147,58 @@ with st.sidebar:
     n_loc = st.text_input("地名", key="sidebar_n_loc")
     n_vendor = st.selectbox("取引先", VENDORS_MASTER, key="sidebar_n_vendor")
     n_stock = st.number_input("初期在庫", min_value=0, value=0, key="sidebar_n_stock")
-    n_alert = st.number_input("アラート基準", min_value=0, value=5, key="sidebar_n_alert")
-    
+    n_alert = st.number_input(
+        "アラート基準", min_value=0, value=5, key="sidebar_n_alert"
+    )
+
     if st.button("新規登録実行", use_container_width=True, type="primary"):
-        is_duplicate = not df_stock[(df_stock["商品名"] == n_item) & (df_stock["サイズ"] == n_size) & (df_stock["地名"] == n_loc)].empty
+        is_duplicate = not df_stock[
+            (df_stock["商品名"] == n_item)
+            & (df_stock["サイズ"] == n_size)
+            & (df_stock["地名"] == n_loc)
+        ].empty
         if is_duplicate:
             st.error(f"❌ 重複エラー")
         elif n_item and n_loc:
             now = get_now_jst()
-            new_row = pd.DataFrame([{"最終更新日": now, "商品名": n_item, "サイズ": n_size, "地名": n_loc, "在庫数": n_stock, "アラート基準": n_alert, "取引先": n_vendor}])
-            new_log = pd.DataFrame([{"日時": now, "商品名": n_item, "サイズ": n_size, "地名": n_loc, "区分": "新規登録", "数量": n_stock, "在庫数": n_stock, "担当者": "システム"}])
-            if update_github_data(FILE_PATH_STOCK, pd.concat([df_stock, new_row], ignore_index=True), sha_stock, "Add Item") and \
-               update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_log)], ignore_index=True), sha_log, "Add Log"):
+            new_row = pd.DataFrame(
+                [
+                    {
+                        "最終更新日": now,
+                        "商品名": n_item,
+                        "サイズ": n_size,
+                        "地名": n_loc,
+                        "在庫数": n_stock,
+                        "アラート基準": n_alert,
+                        "取引先": n_vendor,
+                    }
+                ]
+            )
+            new_log = pd.DataFrame(
+                [
+                    {
+                        "日時": now,
+                        "商品名": n_item,
+                        "サイズ": n_size,
+                        "地名": n_loc,
+                        "区分": "新規登録",
+                        "数量": n_stock,
+                        "在庫数": n_stock,
+                        "担当者": "システム",
+                    }
+                ]
+            )
+            if update_github_data(
+                FILE_PATH_STOCK,
+                pd.concat([df_stock, new_row], ignore_index=True),
+                sha_stock,
+                "Add Item",
+            ) and update_github_data(
+                FILE_PATH_LOG,
+                pd.concat([df_log, pd.DataFrame(new_log)], ignore_index=True),
+                sha_log,
+                "Add Log",
+            ):
                 st.success("登録完了")
                 st.rerun()
 
@@ -130,34 +206,70 @@ with st.sidebar:
 st.title("📦 在庫管理")
 
 c1, c2, c3, c4 = st.columns(4)
-with c1: s_item = st.selectbox("検索:商品名", get_opts(df_stock["商品名"]), key="filter_item")
-with c2: s_size = st.selectbox("検索:サイズ", get_opts(df_stock["サイズ"]), key="filter_size")
-with c3: search_loc = st.text_input("検索:地名（手入力）", placeholder="例: 青森", key="filter_loc")
-with c4: s_vendor = st.selectbox("検索:取引先", get_opts(df_stock["取引先"]), key="filter_vendor")
+with c1:
+    s_item = st.selectbox(
+        "検索:商品名", get_opts(df_stock["商品名"]), key="filter_item"
+    )
+with c2:
+    s_size = st.selectbox(
+        "検索:サイズ", get_opts(df_stock["サイズ"]), key="filter_size"
+    )
+with c3:
+    search_loc = st.text_input(
+        "検索:地名（手入力）", placeholder="例: 青森", key="filter_loc"
+    )
+with c4:
+    s_vendor = st.selectbox(
+        "検索:取引先", get_opts(df_stock["取引先"]), key="filter_vendor"
+    )
 
 # 有効在庫の計算
 df_disp = df_stock.copy()
-res_sum = df_res_all.groupby(["商品名", "サイズ", "地名"])["数量"].sum().reset_index().rename(columns={"数量": "予約計"})
-df_disp = pd.merge(df_disp, res_sum, on=["商品名", "サイズ", "地名"], how="left").fillna({"予約計": 0})
+res_sum = (
+    df_res_all.groupby(["商品名", "サイズ", "地名"])["数量"]
+    .sum()
+    .reset_index()
+    .rename(columns={"数量": "予約計"})
+)
+df_disp = pd.merge(
+    df_disp, res_sum, on=["商品名", "サイズ", "地名"], how="left"
+).fillna({"予約計": 0})
 df_disp["有効在庫"] = df_disp["在庫数"] - df_disp["予約計"]
 
 # フィルタリング
-if s_item != "すべて": df_disp = df_disp[df_disp["商品名"] == s_item]
-if s_size != "すべて": df_disp = df_disp[df_disp["サイズ"] == s_size]
-if search_loc.strip(): df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
-if s_vendor != "すべて": df_disp = df_disp[df_disp["取引先"] == s_vendor]
+if s_item != "すべて":
+    df_disp = df_disp[df_disp["商品名"] == s_item]
+if s_size != "すべて":
+    df_disp = df_disp[df_disp["サイズ"] == s_size]
+if search_loc.strip():
+    df_disp = df_disp[df_disp["地名"].astype(str).str.contains(search_loc, na=False)]
+if s_vendor != "すべて":
+    df_disp = df_disp[df_disp["取引先"] == s_vendor]
 
 # 表示列の整理
-disp_cols = ["最終更新日", "商品名", "サイズ", "地名", "在庫数", "有効在庫", "アラート基準", "取引先"]
+disp_cols = [
+    "最終更新日",
+    "商品名",
+    "サイズ",
+    "地名",
+    "在庫数",
+    "有効在庫",
+    "アラート基準",
+    "取引先",
+]
 df_show = df_disp[disp_cols].sort_values("最終更新日", ascending=False)
 styled_df = df_show.style.apply(highlight_alert, axis=1)
 
 event = st.dataframe(
-    styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row",
+    styled_df,
+    use_container_width=True,
+    hide_index=True,
+    on_select="rerun",
+    selection_mode="multi-row",
     column_config={
         "在庫数": st.column_config.NumberColumn("実在庫", format="%d"),
-        "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d")
-    }
+        "有効在庫": st.column_config.NumberColumn("有効在庫", format="%d"),
+    },
 )
 
 # --- 5. 操作パネル ---
@@ -166,41 +278,51 @@ selected_indices = event.selection.rows
 if selected_indices:
     selected_data_list = df_show.iloc[selected_indices]
     st.markdown(f"### 📋 {len(selected_data_list)} 件の一括操作")
-    
+
     # --- 1. 共通設定 ---
     with st.container(border=True):
         st.markdown("**⚡ 全選択データへの共通設定**")
         cc1, cc2, cc3 = st.columns([1.5, 1.5, 1])
         with cc1:
-            bulk_type = st.radio("操作区分を一括変更", ["入庫", "出庫", "予約出庫", "調整"], horizontal=True)
+            bulk_type = st.radio(
+                "操作区分を一括変更",
+                ["入庫", "出庫", "予約出庫", "調整"],
+                horizontal=True,
+            )
         with cc2:
-            is_res = (bulk_type == "予約出庫")
+            is_res = bulk_type == "予約出庫"
             tomorrow = dt.date.today() + dt.timedelta(days=1)
-            
+
             if is_res:
                 if "res_dates_list" not in st.session_state:
                     st.session_state.res_dates_list = []
-                
+
                 # カレンダーと追加ボタンを横並びにする
                 c_date, c_btn = st.columns([3, 1])
                 with c_date:
-                    chosen_date = st.date_input("予約日をカレンダーから選択", value=tomorrow, key="auto_selector_date")
+                    chosen_date = st.date_input(
+                        "予約日をカレンダーから選択",
+                        value=tomorrow,
+                        key="auto_selector_date",
+                    )
                 with c_btn:
-                    st.write("") # 上の余白調整
-                    st.write("") 
+                    st.write("")  # 上の余白調整
+                    st.write("")
                     if st.button("➕ 追加", use_container_width=True, type="secondary"):
                         if chosen_date not in st.session_state.res_dates_list:
                             st.session_state.res_dates_list.append(chosen_date)
                             st.session_state.res_dates_list.sort()
                             st.rerun()
-                
+
                 # 選択中の日付リスト（❌ボタンで個別にサクッと消せる）
                 if st.session_state.res_dates_list:
                     st.write("選択中の予約日程（クリックで削除）:")
                     cols_dates = st.columns(len(st.session_state.res_dates_list) + 1)
                     for d_idx, d in enumerate(st.session_state.res_dates_list):
                         with cols_dates[d_idx]:
-                            if st.button(f"❌ {d}", key=f"del_date_btn_{d_idx}", type="secondary"):
+                            if st.button(
+                                f"❌ {d}", key=f"del_date_btn_{d_idx}", type="secondary"
+                            ):
                                 st.session_state.res_dates_list.remove(d)
                                 st.rerun()
                     with cols_dates[-1]:
@@ -208,17 +330,21 @@ if selected_indices:
                             st.session_state.res_dates_list = []
                             st.rerun()
                 else:
-                    st.caption("※上のカレンダーで日付を選んで、[➕ 追加] を押してください。")
+                    st.caption(
+                        "※上のカレンダーで日付を選んで、[➕ 追加] を押してください。"
+                    )
             else:
                 st.date_input("共通の予約日", value=tomorrow, disabled=True)
-                
+
         with cc3:
             user_name = st.selectbox("担当者", ["-- 選択 --"] + USERS)
 
     if user_name != "-- 選択 --":
         update_payload = {}
         for i, row in selected_data_list.iterrows():
-            with st.expander(f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
+            with st.expander(
+                f"📌 {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True
+            ):
                 if bulk_type == "予約出庫":
                     col1, col2, col3 = st.columns([1.5, 2, 0.6])
                     with col1:
@@ -227,17 +353,28 @@ if selected_indices:
                         res_data_list = []
                         if st.session_state.get("res_dates_list"):
                             for d_idx, d in enumerate(st.session_state.res_dates_list):
-                                r_qty = st.number_input(f"📅 {d} の数量", min_value=0, value=0, key=f"qty_{i}_{d}_{d_idx}")
+                                r_qty = st.number_input(
+                                    f"📅 {d} の数量",
+                                    min_value=0,
+                                    value=0,
+                                    key=f"qty_{i}_{d}_{d_idx}",
+                                )
                                 if r_qty > 0:
                                     res_data_list.append({"res_date": d, "qty": r_qty})
                         else:
-                            st.warning("予約日が選択されていません。上のカレンダーから日付を選んで追加してください。")
+                            st.warning(
+                                "予約日が選択されていません。上のカレンダーから日付を選んで追加してください。"
+                            )
                     with col3:
                         is_delete = st.checkbox("削除", key=f"del_{i}")
-                    
+
                     update_payload[i] = {
-                        "type": bulk_type, "res_data_list": res_data_list, "loc": row['地名'], 
-                        "alert": int(row['アラート基準']), "delete": is_delete, "orig_data": row
+                        "type": bulk_type,
+                        "res_data_list": res_data_list,
+                        "loc": row["地名"],
+                        "alert": int(row["アラート基準"]),
+                        "delete": is_delete,
+                        "orig_data": row,
                     }
                 else:
                     # 入庫・出庫・調整
@@ -245,48 +382,71 @@ if selected_indices:
                     with col1:
                         st.info(f"区分: {bulk_type}")
                     with col2:
-                        m_qty = st.number_input("数量", min_value=-10000, value=0, key=f"qty_{i}")
+                        m_qty = st.number_input(
+                            "数量", min_value=-10000, value=0, key=f"qty_{i}"
+                        )
                     with col3:
-                        new_loc = st.text_input("地名変更", value=row['地名'], key=f"loc_{i}")
+                        new_loc = st.text_input(
+                            "地名変更", value=row["地名"], key=f"loc_{i}"
+                        )
                     with col4:
-                        new_alert = st.number_input("アラート基準", min_value=0, value=int(row['アラート基準']), key=f"alt_{i}")
+                        new_alert = st.number_input(
+                            "アラート基準",
+                            min_value=0,
+                            value=int(row["アラート基準"]),
+                            key=f"alt_{i}",
+                        )
                     with col5:
                         is_delete = st.checkbox("削除", key=f"del_{i}")
-                    
+
                     update_payload[i] = {
-                        "type": bulk_type, "qty": m_qty, "loc": new_loc, "alert": new_alert, 
-                        "delete": is_delete, "orig_data": row
+                        "type": bulk_type,
+                        "qty": m_qty,
+                        "loc": new_loc,
+                        "alert": new_alert,
+                        "delete": is_delete,
+                        "orig_data": row,
                     }
 
         # --- 確定画面（ポップオーバー） ---
         with st.popover("✅ 内容を確認して確定", use_container_width=True):
             st.markdown(f"### ⚠️ 以下の内容で確定しますか？")
-            
+
             summary_list = []
             has_changes = False
-            
+
             for idx, p in update_payload.items():
                 row = p["orig_data"]
                 if p["delete"]:
-                    summary_list.append(f"🔥 **削除**: {row['商品名']} ({row['サイズ']}) {row['地名']}")
+                    summary_list.append(
+                        f"🔥 **削除**: {row['商品名']} ({row['サイズ']}) {row['地名']}"
+                    )
                     has_changes = True
                 elif p["type"] == "予約出庫":
                     if p["res_data_list"]:
                         has_changes = True
                         for res_item in p["res_data_list"]:
-                            summary_list.append(f"📅 **予約出庫**: {row['商品名']} ({row['サイズ']}) {row['地名']} 数量：{res_item['qty']} (予約日:{res_item['res_date']})")
+                            summary_list.append(
+                                f"📅 **予約出庫**: {row['商品名']} ({row['サイズ']}) {row['地名']} 数量：{res_item['qty']} (予約日:{res_item['res_date']})"
+                            )
                 else:
                     if p["qty"] != 0 or p["loc"] != row["地名"]:
                         has_changes = True
                         current_item = f"{row['商品名']} ({row['サイズ']}) {p['loc']} 数量：{p['qty']}"
-                        loc_change = f" (地名変更: {row['地名']} → {p['loc']})" if p["loc"] != row["地名"] else ""
-                        summary_list.append(f"📝 **{p['type']}**: {current_item}{loc_change}")
-            
+                        loc_change = (
+                            f" (地名変更: {row['地名']} → {p['loc']})"
+                            if p["loc"] != row["地名"]
+                            else ""
+                        )
+                        summary_list.append(
+                            f"📝 **{p['type']}**: {current_item}{loc_change}"
+                        )
+
             if has_changes:
                 for item in summary_list:
                     st.write(item)
                 st.divider()
-                
+
                 if st.button("👌 実行する", type="primary", use_container_width=True):
                     st.write("データを更新中...")
                     new_df_stock = df_stock.copy()
@@ -296,8 +456,13 @@ if selected_indices:
 
                     for idx, p in update_payload.items():
                         row = p["orig_data"]
-                        mask = (new_df_stock["商品名"] == row["商品名"]) & (new_df_stock["サイズ"] == row["サイズ"]) & (new_df_stock["地名"] == row["地名"])
-                        if not mask.any(): continue
+                        mask = (
+                            (new_df_stock["商品名"] == row["商品名"])
+                            & (new_df_stock["サイズ"] == row["サイズ"])
+                            & (new_df_stock["地名"] == row["地名"])
+                        )
+                        if not mask.any():
+                            continue
                         target_idx = new_df_stock[mask].index[0]
 
                         if p["delete"]:
@@ -305,37 +470,72 @@ if selected_indices:
                         else:
                             if p["type"] == "予約出庫":
                                 for res_item in p["res_data_list"]:
-                                    res_row = pd.DataFrame([{
-                                        "予約日": str(res_item["res_date"]), "商品名": row["商品名"], 
-                                        "サイズ": row["サイズ"], "地名": row["地名"], 
-                                        "数量": res_item["qty"], "担当者": user_name
-                                    }])
-                                    new_reservations = pd.concat([new_reservations, res_row], ignore_index=True)
+                                    res_row = pd.DataFrame(
+                                        [
+                                            {
+                                                "予約日": str(res_item["res_date"]),
+                                                "商品名": row["商品名"],
+                                                "サイズ": row["サイズ"],
+                                                "地名": row["地名"],
+                                                "数量": res_item["qty"],
+                                                "担当者": user_name,
+                                            }
+                                        ]
+                                    )
+                                    new_reservations = pd.concat(
+                                        [new_reservations, res_row], ignore_index=True
+                                    )
                             else:
-                                if p["type"] == "入庫":      new_df_stock.at[target_idx, "在庫数"] += p["qty"]
-                                elif p["type"] == "出庫":    new_df_stock.at[target_idx, "在庫数"] -= p["qty"]
-                                elif p["type"] == "調整":    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
-                                
+                                if p["type"] == "入庫":
+                                    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
+                                elif p["type"] == "出庫":
+                                    new_df_stock.at[target_idx, "在庫数"] -= p["qty"]
+                                elif p["type"] == "調整":
+                                    new_df_stock.at[target_idx, "在庫数"] += p["qty"]
+
                                 new_df_stock.at[target_idx, "地名"] = p["loc"]
                                 new_df_stock.at[target_idx, "アラート基準"] = p["alert"]
                                 new_df_stock.at[target_idx, "最終更新日"] = now
-                                
-                                new_logs.append({
-                                    "日時": now, "商品名": row["商品名"], "サイズ": row["サイズ"], 
-                                    "地名": p["loc"], "区分": p["type"], "数量": p["qty"], 
-                                    "在庫数": new_df_stock.at[target_idx, "在庫数"], "担当者": user_name
-                                })
 
-                    if update_github_data(FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update") and \
-                       update_github_data(FILE_PATH_LOG, pd.concat([df_log, pd.DataFrame(new_logs)], ignore_index=True), sha_log, "Add Log") and \
-                       update_github_data(FILE_PATH_RESERVATION, new_reservations, sha_res_all, "Add Res"):
+                                new_logs.append(
+                                    {
+                                        "日時": now,
+                                        "商品名": row["商品名"],
+                                        "サイズ": row["サイズ"],
+                                        "地名": p["loc"],
+                                        "区分": p["type"],
+                                        "数量": p["qty"],
+                                        "在庫数": new_df_stock.at[target_idx, "在庫数"],
+                                        "担当者": user_name,
+                                    }
+                                )
+
+                    if (
+                        update_github_data(
+                            FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update"
+                        )
+                        and update_github_data(
+                            FILE_PATH_LOG,
+                            pd.concat(
+                                [df_log, pd.DataFrame(new_logs)], ignore_index=True
+                            ),
+                            sha_log,
+                            "Add Log",
+                        )
+                        and update_github_data(
+                            FILE_PATH_RESERVATION,
+                            new_reservations,
+                            sha_res_all,
+                            "Add Res",
+                        )
+                    ):
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []
                         st.success("完了！")
                         st.rerun()
             else:
                 st.write("変更なし")
-                
+
 # --- 6. 予約・履歴 ---
 st.divider()
 
@@ -344,70 +544,107 @@ st.subheader("📅 出庫予約リスト")
 if not df_res_all.empty:
     # 1. 予約リストに在庫情報を結合
     df_rv = pd.merge(
-        df_res_all, 
-        df_stock[["商品名", "サイズ", "地名", "在庫数"]], 
-        on=["商品名", "サイズ", "地名"], 
-        how="left"
+        df_res_all,
+        df_stock[["商品名", "サイズ", "地名", "在庫数"]],
+        on=["商品名", "サイズ", "地名"],
+        how="left",
     ).fillna({"在庫数": 0})
 
     # 2. 累積計算（並び替えてから累積を出し、最後に「元の行番号」を保持する）
     df_rv["予約日_tmp"] = pd.to_datetime(df_rv["予約日"])
     df_rv = df_rv.sort_values(["商品名", "サイズ", "地名", "予約日_tmp"])
-    
+
     df_rv["累積予約数"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].cumsum()
-    df_rv["全予約合計"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].transform("sum")
+    df_rv["全予約合計"] = df_rv.groupby(["商品名", "サイズ", "地名"])["数量"].transform(
+        "sum"
+    )
     df_rv["出荷後在庫"] = df_rv["在庫数"] - df_rv["累積予約数"]
     df_rv["全体有効在庫"] = df_rv["在庫数"] - df_rv["全予約合計"]
 
     # 重要：ここで現在の並び順に基づいた「一時的なID」を振る
-    df_rv = df_rv.reset_index() # 元の index を 'index' 列として保持
+    df_rv = df_rv.reset_index()  # 元の index を 'index' 列として保持
     df_rv["tmp_id"] = range(len(df_rv))
 
     # 3. 画面表示用のフィルター（tmp_id は保持される）
-    res_filter_item = st.selectbox("予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item")
+    res_filter_item = st.selectbox(
+        "予約検索:商品名", get_opts(df_rv["商品名"]), key="res_f_item"
+    )
     df_rv_display = df_rv.copy()
     if res_filter_item != "すべて":
         df_rv_display = df_rv_display[df_rv_display["商品名"] == res_filter_item]
 
     df_rv_display["予約日"] = pd.to_datetime(df_rv_display["予約日"]).dt.date
-    res_disp_cols = ["予約日", "商品名", "サイズ", "地名", "数量", "在庫数", "出荷後在庫", "全体有効在庫", "担当者"]
+    res_disp_cols = [
+        "予約日",
+        "商品名",
+        "サイズ",
+        "地名",
+        "数量",
+        "在庫数",
+        "出荷後在庫",
+        "全体有効在庫",
+        "担当者",
+    ]
 
-   # 4. テーブル表示
+    # 4. テーブル表示
     styled_rv = df_rv_display[res_disp_cols].style.apply(highlight_res_alert, axis=1)
 
     res_event = st.dataframe(
         styled_rv,  # ← ここを df_rv_display ではなく styled_rv にする
-        use_container_width=True, 
-        hide_index=True, 
+        use_container_width=True,
+        hide_index=True,
         on_select="rerun",
         selection_mode="multi-row",
         column_config={
             "予約日": st.column_config.DateColumn("予約日", format="YYYY-MM-DD"),
             "数量": st.column_config.NumberColumn("予約数", format="%d"),
             "在庫数": st.column_config.NumberColumn("現在の実在庫", format="%d"),
-            "出荷後在庫": st.column_config.NumberColumn("今回の出荷後残数", format="%d"),
-            "全体有効在庫": st.column_config.NumberColumn("全予約完了後の残数", format="%d"),
-        }
+            "出荷後在庫": st.column_config.NumberColumn(
+                "今回の出荷後残数", format="%d"
+            ),
+            "全体有効在庫": st.column_config.NumberColumn(
+                "全予約完了後の残数", format="%d"
+            ),
+        },
     )
-    
+
     # 5. 選択行の特定（tmp_id を使って正しく紐付け）
     selected_indices = res_event.selection.rows
     if selected_indices:
         st.markdown(f"#### ✍️ 選択中の予約 ({len(selected_indices)}件) を編集")
         # 選択された行の tmp_id を取得し、それをもとに df_rv からデータを抽出
         df_selected = df_rv_display.iloc[selected_indices]
-        
+
         res_updates = {}
         for i, row in df_selected.iterrows():
-            orig_idx = row["index"] # 元の df_res_all のインデックス
-            with st.expander(f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})", expanded=True):
+            orig_idx = row["index"]  # 元の df_res_all のインデックス
+            with st.expander(
+                f"予約: {row['商品名']} ({row['サイズ']} / {row['地名']})",
+                expanded=True,
+            ):
                 c1, c2, c3 = st.columns([1.5, 1, 0.5])
-                with c1: upd_date = st.date_input("予約日変更", value=row['予約日'], key=f"up_res_d_{orig_idx}")
-                with c2: upd_qty = st.number_input("数量変更", min_value=1, value=int(row['数量']), key=f"up_res_q_{orig_idx}")
-                with c3: is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
-                res_updates[orig_idx] = {"date": upd_date, "qty": upd_qty, "delete": is_res_del}
+                with c1:
+                    upd_date = st.date_input(
+                        "予約日変更", value=row["予約日"], key=f"up_res_d_{orig_idx}"
+                    )
+                with c2:
+                    upd_qty = st.number_input(
+                        "数量変更",
+                        min_value=1,
+                        value=int(row["数量"]),
+                        key=f"up_res_q_{orig_idx}",
+                    )
+                with c3:
+                    is_res_del = st.checkbox("削除", key=f"up_res_del_{orig_idx}")
+                res_updates[orig_idx] = {
+                    "date": upd_date,
+                    "qty": upd_qty,
+                    "delete": is_res_del,
+                }
 
-        if st.button("✅ 予約の変更/削除を確定する", type="primary", use_container_width=True):
+        if st.button(
+            "✅ 予約の変更/削除を確定する", type="primary", use_container_width=True
+        ):
             new_df_res = df_res_all.copy()
             for o_idx, val in res_updates.items():
                 if val["delete"]:
@@ -415,8 +652,10 @@ if not df_res_all.empty:
                 else:
                     new_df_res.at[o_idx, "予約日"] = str(val["date"])
                     new_df_res.at[o_idx, "数量"] = val["qty"]
-            
-            update_github_data(FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Fixed Index Sync Issue")
+
+            update_github_data(
+                FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Fixed Index Sync Issue"
+            )
             st.rerun()
 else:
     st.write("現在予約はありません。")
@@ -428,51 +667,81 @@ st.subheader("📜 入出庫履歴")
 
 if not df_log.empty:
     # 1. フィルター設置
-    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns([1.5, 1.2, 1, 1, 1.2]) # 配置バランス調整
-    
+    col_log1, col_log2, col_log3, col_log4, col_log5 = st.columns(
+        [1.5, 1.2, 1, 1, 1.2]
+    )  # 配置バランス調整
+
     with col_log1:
-        df_log["日時"] = pd.to_datetime(df_log["日時"], errors='coerce')
+        df_log["日時"] = pd.to_datetime(df_log["日時"], errors="coerce")
         df_log = df_log.dropna(subset=["日時"])
         min_date, max_date = df_log["日時"].min().date(), df_log["日時"].max().date()
-        log_date_range = st.date_input("期間", value=(min_date, max_date), key="log_date_filter")
-    
+        log_date_range = st.date_input(
+            "期間", value=(min_date, max_date), key="log_date_filter"
+        )
+
     # 【修正ポイント】履歴専用の絞り込みを追加
     with col_log2:
-        l_item = st.selectbox("履歴検索:商品名", get_opts(df_log["商品名"]), key="log_f_item")
+        l_item = st.selectbox(
+            "履歴検索:商品名", get_opts(df_log["商品名"]), key="log_f_item"
+        )
     with col_log3:
-        l_size = st.selectbox("履歴検索:サイズ", get_opts(df_log["サイズ"]), key="log_f_size")
+        l_size = st.selectbox(
+            "履歴検索:サイズ", get_opts(df_log["サイズ"]), key="log_f_size"
+        )
     with col_log4:
         # 地名は種類が多い可能性があるため、全件取得して選択肢にする
         l_loc = st.selectbox("履歴検索:地名", get_opts(df_log["地名"]), key="log_f_loc")
-    
+
     with col_log5:
-        all_types = [t for t in sorted(df_log["区分"].unique()) if t not in ["基準変更", "編集"] and str(t).strip() != ""]
-        selected_types = st.multiselect("区分（複数可）", options=all_types, key="log_type_filter")
+        all_types = [
+            t
+            for t in sorted(df_log["区分"].unique())
+            if t not in ["基準変更", "編集"] and str(t).strip() != ""
+        ]
+        selected_types = st.multiselect(
+            "区分（複数可）", options=all_types, key="log_type_filter"
+        )
 
     # 2. データの絞り込み実行
     df_log_filtered = df_log.copy()
-    
+
     # 日付フィルタ
     if isinstance(log_date_range, tuple) and len(log_date_range) == 2:
-        df_log_filtered = df_log_filtered[(df_log_filtered["日時"].dt.date >= log_date_range[0]) & (df_log_filtered["日時"].dt.date <= log_date_range[1])]
-    
+        df_log_filtered = df_log_filtered[
+            (df_log_filtered["日時"].dt.date >= log_date_range[0])
+            & (df_log_filtered["日時"].dt.date <= log_date_range[1])
+        ]
+
     # 【修正ポイント】商品名・サイズ・地名フィルタ
-    if l_item != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["商品名"] == l_item]
-    if l_size != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["サイズ"] == l_size]
-    if l_loc != "すべて": df_log_filtered = df_log_filtered[df_log_filtered["地名"] == l_loc]
-    
+    if l_item != "すべて":
+        df_log_filtered = df_log_filtered[df_log_filtered["商品名"] == l_item]
+    if l_size != "すべて":
+        df_log_filtered = df_log_filtered[df_log_filtered["サイズ"] == l_size]
+    if l_loc != "すべて":
+        df_log_filtered = df_log_filtered[df_log_filtered["地名"] == l_loc]
+
     # 区分フィルタ
     if selected_types:
         df_log_filtered = df_log_filtered[df_log_filtered["区分"].isin(selected_types)]
 
     # 3. 履歴の表示
-    disp_log_cols = ["日時", "商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"]
+    disp_log_cols = [
+        "日時",
+        "商品名",
+        "サイズ",
+        "地名",
+        "区分",
+        "数量",
+        "在庫数",
+        "担当者",
+    ]
     st.dataframe(
         df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
-        use_container_width=True, hide_index=True,
+        use_container_width=True,
+        hide_index=True,
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
             "数量": st.column_config.NumberColumn("数", format="%d"),
-            "在庫数": st.column_config.NumberColumn("現在庫", format="%d")
-        }
+            "在庫数": st.column_config.NumberColumn("現在庫", format="%d"),
+        },
     )
