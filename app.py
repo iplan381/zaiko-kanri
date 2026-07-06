@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import base64
-import requests
-from io import StringIO
+
+from github_data import get_github_data, update_github_data
 
 
 def get_now_jst():
@@ -13,43 +12,15 @@ def get_now_jst():
 
 
 # --- 1. 設定 ---
-REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri")
 FILE_PATH_STOCK = "inventory_main.csv"
 FILE_PATH_LOG = "stock_log_main.csv"
 FILE_PATH_RESERVATION = "reservations_main.csv"
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 SIZES_MASTER = ["大", "中", "小", "4個入", " - "]
 VENDORS_MASTER = ["富士山", "東山観光", "モンテリア", "ベーカリー"]
 USERS = ["佐藤", "中村", "手塚"]
 
 st.set_page_config(page_title="在庫管理システム", layout="wide")
-
-
-# --- 2. GitHub関数 ---
-def get_github_data(file_path):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = res.json()
-        csv_text = base64.b64decode(content["content"]).decode("utf-8")
-        df = pd.read_csv(StringIO(csv_text))
-        return df.fillna(""), content["sha"]
-    return pd.DataFrame(), None
-
-
-def update_github_data(file_path, df, sha, message):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    csv_content = df.to_csv(index=False)
-    data = {
-        "message": message,
-        "content": base64.b64encode(csv_content.encode("utf-8")).decode("utf-8"),
-        "sha": sha,
-    }
-    res = requests.put(url, headers=headers, json=data)
-    return res.status_code == 200
 
 
 # 予約を自動処理する関数
@@ -193,12 +164,12 @@ with st.sidebar:
                 pd.concat([df_stock, new_row], ignore_index=True),
                 sha_stock,
                 "Add Item",
-            ) and update_github_data(
+            ) in (200, 201) and update_github_data(
                 FILE_PATH_LOG,
                 pd.concat([df_log, pd.DataFrame(new_log)], ignore_index=True),
                 sha_log,
                 "Add Log",
-            ):
+            ) in (200, 201):
                 st.success("登録完了")
                 st.rerun()
 
@@ -514,6 +485,7 @@ if selected_indices:
                         update_github_data(
                             FILE_PATH_STOCK, new_df_stock, sha_stock, "Stock Update"
                         )
+                        in (200, 201)
                         and update_github_data(
                             FILE_PATH_LOG,
                             pd.concat(
@@ -522,12 +494,14 @@ if selected_indices:
                             sha_log,
                             "Add Log",
                         )
+                        in (200, 201)
                         and update_github_data(
                             FILE_PATH_RESERVATION,
                             new_reservations,
                             sha_res_all,
                             "Add Res",
                         )
+                        in (200, 201)
                     ):
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []

@@ -1,44 +1,19 @@
 import streamlit as st
 import pandas as pd
-import requests
-import base64
 from datetime import datetime, timedelta, timezone
-import io
+
+from github_data import get_github_data as _get_github_data, update_github_data
 
 # --- 1. 設定（URLバグ防止のため完全に固定） ---
-REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri")
 FILE_PATH_ORDERS = "order_log.csv"
 FILE_PATH_MASTER = "material_master.csv"
 FILE_PATH_VENDOR = "vendor_master.csv"
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 def get_now_jst():return datetime.now(timezone(timedelta(hours=9)))
 
-# --- 2. GitHub連携関数 ---
-def get_github_data(file_path, default_cols):
-    # ここのURL作成で変な文字が混ざらないように厳密に結合
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = res.json()
-        csv_data = base64.b64decode(content["content"]).decode("utf-8")
-        if not csv_data.strip():
-            return pd.DataFrame(columns=default_cols), content["sha"]
-        df = pd.read_csv(io.StringIO(csv_data))
-        for col in default_cols:
-            if col not in df.columns: df[col] = ""
-        return df[default_cols], content["sha"]
-    else:
-        return pd.DataFrame(columns=default_cols), None
 
-def update_github_data(file_path, df, sha, message):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    csv_content = df.to_csv(index=False)
-    content_base64 = base64.b64encode(csv_content.encode("utf-8")).decode("utf-8")
-    data = {"message": message, "content": content_base64, "sha": sha}
-    res = requests.put(url, headers=headers, json=data)
-    return res.status_code
+def get_github_data(file_path, default_cols):
+    return _get_github_data(file_path, default_cols, fillna=False)
+
 
 st.set_page_config(page_title="発注管理", layout="wide", page_icon="📦")
 

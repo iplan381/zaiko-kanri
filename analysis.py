@@ -1,44 +1,26 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import requests
-import base64
-from io import StringIO
 import datetime as dt
 
+from github_data import get_github_data as _get_github_data, update_github_data
+
 # --- 設定 ---
-REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri")
 FILE_PATH_LOG = "stock_log_main.csv"
 FILE_PATH_MASTER = "item_master.csv"
 FILE_PATH_RESERVATION = "reservations_main.csv"  # 予約データ用に追加
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 st.set_page_config(page_title="出庫分析", layout="wide")
 
 @st.cache_data(ttl=60)
 def get_github_data(file_path):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{file_path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = res.json()
-        csv_text = base64.b64decode(content["content"]).decode("utf-8")
-        return pd.read_csv(StringIO(csv_text)).fillna("")
-    return pd.DataFrame()
+    df, _ = _get_github_data(file_path)
+    return df
 
 # GitHub保存用関数（マスタ用）
 def save_master_to_github(df_to_save):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH_MASTER}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    res = requests.get(url, headers=headers)
-    sha = res.json().get("sha") if res.status_code == 200 else None
-    
-    content = base64.b64encode(df_to_save.to_csv(index=False).encode("utf-8")).decode("utf-8")
-    data = {"message": "Update master data", "content": content}
-    if sha:
-        data["sha"] = sha
-    res_put = requests.put(url, headers=headers, json=data)
-    return res_put.status_code
+    _, sha = _get_github_data(FILE_PATH_MASTER)
+    return update_github_data(FILE_PATH_MASTER, df_to_save, sha, "Update master data")
 
 # 各データの読み込み
 df_log_raw = get_github_data(FILE_PATH_LOG)
