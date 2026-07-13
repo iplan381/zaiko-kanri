@@ -1,3 +1,6 @@
 .streamlit/secrets.toml
 __pycache__/
 *.pyc
+
+# データはzaiko-kanri-dataリポジトリで管理(GitHub Contents API経由)
+*.csv

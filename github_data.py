@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri")
+REPO_NAME = st.secrets.get("REPO_NAME", "iplan381/zaiko-kanri-data")
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 
