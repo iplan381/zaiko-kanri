@@ -95,7 +95,10 @@ def highlight_alert(row):
 # データ読み込み
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
 df_log, sha_log = get_github_data(FILE_PATH_LOG)
-df_res_all, sha_res_all = get_github_data(FILE_PATH_RESERVATION)
+df_res_all, sha_res_all = get_github_data(
+    FILE_PATH_RESERVATION,
+    default_cols=["予約日", "商品名", "サイズ", "地名", "数量", "担当者"],
+)
 df_stock, df_log = process_reservations(df_stock, sha_stock, df_log, sha_log)
 
 # --- 3. サイドバー：新規商品登録 ---
