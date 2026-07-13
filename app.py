@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 
-from github_data import get_github_data, update_github_data
+from github_data import get_github_data as _get_github_data, update_github_data
+
+
+@st.cache_data(ttl=30)
+def get_github_data(file_path, default_cols=None):
+    return _get_github_data(file_path, default_cols=default_cols)
 
 
 def get_now_jst():
@@ -68,6 +73,7 @@ def process_reservations(df_stock, sha_stock, df_log, sha_log):
         update_github_data(
             FILE_PATH_RESERVATION, df_res_remain, sha_res, "Clean up Reservation"
         )
+        st.cache_data.clear()
         st.success(f"📢 本日の出庫予約を在庫に反映しました")
         st.rerun()
     return df_stock, df_log
@@ -173,6 +179,7 @@ with st.sidebar:
                 sha_log,
                 "Add Log",
             ) in (200, 201):
+                st.cache_data.clear()
                 st.success("登録完了")
                 st.rerun()
 
@@ -508,6 +515,7 @@ if selected_indices:
                     ):
                         if "res_dates_list" in st.session_state:
                             st.session_state.res_dates_list = []
+                        st.cache_data.clear()
                         st.success("完了！")
                         st.rerun()
             else:
@@ -633,6 +641,7 @@ if not df_res_all.empty:
             update_github_data(
                 FILE_PATH_RESERVATION, new_df_res, sha_res_all, "Fixed Index Sync Issue"
             )
+            st.cache_data.clear()
             st.rerun()
 else:
     st.write("現在予約はありません。")
