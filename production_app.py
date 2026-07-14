@@ -40,7 +40,7 @@ st.markdown(
 
     :root {
         --note-desk: #eaf4fb;
-        --note-cover: #4fb8ac;
+        --note-cover: #bdeee4;
         --note-paper: #ffffff;
         --note-rule: #bfe0f2;
         --note-border: #bfe0ef;
@@ -70,26 +70,22 @@ st.markdown(
         color: var(--note-ink);
     }
 
-    /* パネル内の紙は常に明色固定なので、OSのダークテーマでも文字色を強制的に読める色にする */
-    [data-testid="stLayoutWrapper"][height="850px"] p,
-    [data-testid="stLayoutWrapper"][height="850px"] label,
-    [data-testid="stLayoutWrapper"][height="850px"] span,
+    /* パネル・サイドバーは常に明色固定の背景なので、OSのダークテーマでも文字色を強制的に読める色にする。
+       ただしボタンの中身は対象から除外し、Streamlitのテーマ配色（背景とセットの文字色）をそのまま使わせる。
+       ("color: revert" はブラウザによって挙動が割れるため使わない) */
+    [data-testid="stLayoutWrapper"][height="850px"] p:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stLayoutWrapper"][height="850px"] label:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stLayoutWrapper"][height="850px"] span:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
     [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stWidgetLabel"],
-    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stMarkdownContainer"],
-    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stCaptionContainer"] {
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stMarkdownContainer"]:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stCaptionContainer"],
+    [data-testid="stSidebar"] p:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stSidebar"] label:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stSidebar"] span:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:not([data-testid="stButton"] *):not([data-testid="stLinkButton"] *),
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
         color: var(--note-ink) !important;
-    }
-
-    /* ボタン自体は背景色とセットの配色を保ちたいので、文字色の強制対象から外す */
-    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stButton"] p,
-    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stButton"] span,
-    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stLinkButton"] p,
-    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stLinkButton"] span,
-    [data-testid="stSidebar"] [data-testid="stButton"] p,
-    [data-testid="stSidebar"] [data-testid="stButton"] span,
-    [data-testid="stSidebar"] [data-testid="stLinkButton"] p,
-    [data-testid="stSidebar"] [data-testid="stLinkButton"] span {
-        color: revert !important;
     }
 
     hr { border: none; border-top: 2px dashed var(--note-border); }
@@ -102,8 +98,106 @@ with st.sidebar:
     st.markdown("### 🔗 クイック移動")
     c1, c2, c3 = st.columns(3)
     c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
-    c2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//")
+    c2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app/")
     c3.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
+    st.divider()
+
+    def _calc_apply(a, b, op):
+        if op == "+":
+            return a + b
+        if op == "-":
+            return a - b
+        if op == "×":
+            return a * b
+        if op == "÷":
+            return a / b if b != 0 else float("nan")
+        return b
+
+    def _calc_fmt(value):
+        if value != value:  # NaN
+            return "エラー"
+        value = round(value, 6)
+        if value == int(value):
+            return str(int(value))
+        return str(value)
+
+    def _calc_press(key):
+        disp = st.session_state.calc_display
+        if key.isdigit():
+            if st.session_state.calc_new_entry or disp in ("0", "エラー"):
+                st.session_state.calc_display = key
+            else:
+                st.session_state.calc_display = disp + key
+            st.session_state.calc_new_entry = False
+        elif key == ".":
+            if st.session_state.calc_new_entry or disp == "エラー":
+                st.session_state.calc_display = "0."
+                st.session_state.calc_new_entry = False
+            elif "." not in disp:
+                st.session_state.calc_display = disp + "."
+        elif key == "C":
+            st.session_state.calc_display = "0"
+            st.session_state.calc_prev = None
+            st.session_state.calc_op = None
+            st.session_state.calc_new_entry = False
+        elif key in ("+", "-", "×", "÷"):
+            current = float(st.session_state.calc_display)
+            if st.session_state.calc_prev is not None and not st.session_state.calc_new_entry:
+                result = _calc_apply(st.session_state.calc_prev, current, st.session_state.calc_op)
+                st.session_state.calc_display = _calc_fmt(result)
+                st.session_state.calc_prev = None if result != result else result
+            else:
+                st.session_state.calc_prev = current
+            st.session_state.calc_op = key
+            st.session_state.calc_new_entry = True
+        elif key == "=":
+            if st.session_state.calc_prev is not None and st.session_state.calc_op is not None:
+                current = float(st.session_state.calc_display)
+                result = _calc_apply(st.session_state.calc_prev, current, st.session_state.calc_op)
+                st.session_state.calc_display = _calc_fmt(result)
+                st.session_state.calc_prev = None
+                st.session_state.calc_op = None
+                st.session_state.calc_new_entry = True
+
+    if "calc_display" not in st.session_state:
+        st.session_state.calc_display = "0"
+        st.session_state.calc_prev = None
+        st.session_state.calc_op = None
+        st.session_state.calc_new_entry = False
+
+    st.markdown("### 🧮 簡易電卓")
+    st.markdown(
+        f"""
+        <div style="
+            background: var(--note-paper);
+            border: 1px solid var(--note-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            text-align: right;
+            font-size: 26px;
+            font-family: ui-monospace, monospace;
+            color: var(--note-ink);
+            margin-bottom: 8px;
+            overflow-x: auto;
+            white-space: nowrap;
+        ">{st.session_state.calc_display}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 「-」「+」単体はStreamlitのMarkdown箇条書き記号と解釈され表示が消えるため、
+    # 見た目がほぼ同じ別のUnicode文字（全角プラス／マイナス記号）をボタンラベルに使う
+    calc_label_to_op = {"－": "-", "＋": "+"}
+    for row in (["7", "8", "9", "÷"], ["4", "5", "6", "×"], ["1", "2", "3", "－"], ["C", "0", ".", "＋"]):
+        cols = st.columns(4)
+        for col, label in zip(cols, row):
+            if col.button(label, key=f"calc_btn_{label}", use_container_width=True):
+                _calc_press(calc_label_to_op.get(label, label))
+                st.rerun()
+
+    if st.button("=", key="calc_btn_eq", type="primary", use_container_width=True):
+        _calc_press("=")
+        st.rerun()
     st.divider()
 
 # データ読み込み
@@ -153,6 +247,33 @@ def item_picker(key_prefix):
         matched = bool(item and size and loc)
 
     return item, size, loc, matched
+
+
+def today_section(df, qty_cols, title):
+    st.markdown(f"### 🗓 本日の{title}")
+    if df.empty:
+        st.write("本日の記録はまだありません。")
+        return
+
+    df_show = df.copy()
+    df_show["日時"] = pd.to_datetime(df_show["日時"], errors="coerce")
+    df_show = df_show.dropna(subset=["日時"])
+
+    today = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
+    df_today = df_show[df_show["日時"].dt.date == today].sort_values("日時", ascending=False)
+
+    if df_today.empty:
+        st.write("本日の記録はまだありません。")
+        return
+
+    totals = "　".join(f"{col}合計 {int(df_today[col].sum())}" for col in qty_cols)
+    st.caption(f"{len(df_today)}件　{totals}")
+    st.dataframe(
+        df_today,
+        hide_index=True,
+        use_container_width=True,
+        column_config={"日時": st.column_config.DatetimeColumn("日時", format="HH:mm")},
+    )
 
 
 def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_col=None):
@@ -327,6 +448,9 @@ with col_left:
                 st.error("商品名・サイズ・地名を入力してください")
 
         st.divider()
+        today_section(df_hakuoshi, ["枚数", "ミス数"], "箔押し記録")
+
+        st.divider()
         history_section(
             df_hakuoshi,
             sha_hakuoshi,
@@ -423,6 +547,9 @@ with col_right:
                     st.rerun()
             else:
                 st.error("商品名・サイズ・地名を入力してください")
+
+        st.divider()
+        today_section(df_seikan, ["製函数", "ミス_フタ", "ミス_身"], "製函記録")
 
         st.divider()
         history_section(

@@ -113,7 +113,7 @@ with st.sidebar:
     st.markdown("### 🔗 クイック移動")
     c1, c2, c3 = st.columns(3)
     c1.link_button(
-        "📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//"
+        "📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app/"
     )
     c2.link_button(
         "🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/"
