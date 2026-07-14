@@ -34,9 +34,10 @@ count = len(pending_df)
 # --- 👈 サイドバー：新規発注依頼 ---
 with st.sidebar:
     st.title("🔗 クイック移動")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     col1.link_button("📦 在庫管理", "https://zaiko-kanri.app/")
     col2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app//")
+    col3.link_button("🏭 製造記録", "https://zaiko-kanri-production.streamlit.app/")  # TODO: デプロイ後に実URLへ差し替え
     st.divider()
 
 with st.sidebar:

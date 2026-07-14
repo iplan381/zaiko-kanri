@@ -46,9 +46,10 @@ if not df_log_raw.empty:
     # --- 🔍 絞り込み条件（サイドバー） ---
     with st.sidebar:
         st.markdown("### 🔗 クイック移動")
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
+        c3.link_button("🏭 製造記録", "https://zaiko-kanri-production.streamlit.app/")  # TODO: デプロイ後に実URLへ差し替え
         st.divider()
     
         st.sidebar.header("🔍 絞り込み条件")
