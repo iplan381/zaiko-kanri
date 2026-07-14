@@ -26,7 +26,77 @@ HAKUOSHI_COLS = ["日時", "商品名", "サイズ", "地名", "枚数", "ミス
 SEIKAN_COLS = ["日時", "商品名", "サイズ", "地名", "製函数", "ミス_フタ", "ミス_身", "担当者"]
 USERS = ["佐藤", "中村", "手塚"]
 
-st.set_page_config(page_title="製造記録（箔押し・製函）", layout="wide", page_icon="🏭")
+st.set_page_config(
+    page_title="製造記録（箔押し・製函）",
+    layout="wide",
+    page_icon="🏭",
+    initial_sidebar_state="collapsed",
+)
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap');
+
+    :root {
+        --note-desk: #eaf4fb;
+        --note-cover: #4fb8ac;
+        --note-paper: #ffffff;
+        --note-rule: #bfe0f2;
+        --note-border: #bfe0ef;
+        --note-ink: #22384a;
+    }
+
+    [data-testid="stAppViewContainer"] { background: var(--note-desk); }
+
+    [data-testid="stSidebar"] {
+        background: var(--note-cover);
+        border-right: 1px solid var(--note-border);
+    }
+
+    h1, h2, h3, [data-testid="stHeading"] {
+        font-family: 'Klee One', sans-serif !important;
+        color: var(--note-ink) !important;
+    }
+
+    [data-testid="stLayoutWrapper"][height="850px"] {
+        background-color: var(--note-paper);
+        background-image: repeating-linear-gradient(
+            transparent 0px, transparent 31px, var(--note-rule) 32px
+        );
+        border: 1px solid var(--note-border) !important;
+        border-radius: 10px !important;
+        box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.12);
+        color: var(--note-ink);
+    }
+
+    /* パネル内の紙は常に明色固定なので、OSのダークテーマでも文字色を強制的に読める色にする */
+    [data-testid="stLayoutWrapper"][height="850px"] p,
+    [data-testid="stLayoutWrapper"][height="850px"] label,
+    [data-testid="stLayoutWrapper"][height="850px"] span,
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stWidgetLabel"],
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stMarkdownContainer"],
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stCaptionContainer"] {
+        color: var(--note-ink) !important;
+    }
+
+    /* ボタン自体は背景色とセットの配色を保ちたいので、文字色の強制対象から外す */
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stButton"] p,
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stButton"] span,
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stLinkButton"] p,
+    [data-testid="stLayoutWrapper"][height="850px"] [data-testid="stLinkButton"] span,
+    [data-testid="stSidebar"] [data-testid="stButton"] p,
+    [data-testid="stSidebar"] [data-testid="stButton"] span,
+    [data-testid="stSidebar"] [data-testid="stLinkButton"] p,
+    [data-testid="stSidebar"] [data-testid="stLinkButton"] span {
+        color: revert !important;
+    }
+
+    hr { border: none; border-top: 2px dashed var(--note-border); }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 with st.sidebar:
     st.markdown("### 🔗 クイック移動")
