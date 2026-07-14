@@ -49,7 +49,7 @@ if not df_log_raw.empty:
         c1, c2, c3 = st.columns(3)
         c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
         c2.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
-        c3.link_button("🏭 製造記録", "https://zaiko-kanri-production.streamlit.app/")  # TODO: デプロイ後に実URLへ差し替え
+        c3.link_button("🏭 製造記録", "https://iplan381-zaiko-kanri-production-app-uuffo2.streamlit.app/")
         st.divider()
     
         st.sidebar.header("🔍 絞り込み条件")
