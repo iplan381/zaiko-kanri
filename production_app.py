@@ -95,13 +95,49 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key):
     df_show["日時"] = pd.to_datetime(df_show["日時"], errors="coerce")
     df_show = df_show.dropna(subset=["日時"]).sort_values("日時", ascending=False)
 
-    item_opts = ["すべて"] + sorted(
-        [str(x) for x in df_show["商品名"].unique() if str(x).strip() != ""]
-    )
-    f_item = st.selectbox("商品名で絞り込み", item_opts, key=f"{delete_key}_filter")
+    def _opts(col):
+        return ["すべて"] + sorted(
+            [str(x) for x in df_show[col].unique() if str(x).strip() != ""]
+        )
+
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        f_item = st.selectbox("商品名", _opts("商品名"), key=f"{delete_key}_filter_item")
+    with fc2:
+        f_size = st.selectbox("サイズ", _opts("サイズ"), key=f"{delete_key}_filter_size")
+    fc3, fc4 = st.columns(2)
+    with fc3:
+        f_loc = st.selectbox("地名", _opts("地名"), key=f"{delete_key}_filter_loc")
+    with fc4:
+        f_user = st.selectbox("担当者", _opts("担当者"), key=f"{delete_key}_filter_user")
+
+    min_date = df_show["日時"].min().date()
+    max_date = df_show["日時"].max().date()
+    fd1, fd2 = st.columns(2)
+    with fd1:
+        f_start = st.date_input(
+            "開始日", value=min_date, min_value=min_date, max_value=max_date,
+            key=f"{delete_key}_filter_start",
+        )
+    with fd2:
+        f_end = st.date_input(
+            "終了日", value=max_date, min_value=min_date, max_value=max_date,
+            key=f"{delete_key}_filter_end",
+        )
+
     if f_item != "すべて":
         df_show = df_show[df_show["商品名"] == f_item]
+    if f_size != "すべて":
+        df_show = df_show[df_show["サイズ"] == f_size]
+    if f_loc != "すべて":
+        df_show = df_show[df_show["地名"] == f_loc]
+    if f_user != "すべて":
+        df_show = df_show[df_show["担当者"] == f_user]
+    df_show = df_show[
+        (df_show["日時"].dt.date >= f_start) & (df_show["日時"].dt.date <= f_end)
+    ]
 
+    st.caption(f"該当 {len(df_show)} 件（最新100件まで表示）")
     df_show = df_show.head(100)
     df_show.insert(0, "削除", False)
 
