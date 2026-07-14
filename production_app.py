@@ -85,7 +85,7 @@ def item_picker(key_prefix):
     return item, size, loc, matched
 
 
-def history_section(df, sha, file_path, disp_cols, title, delete_key):
+def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_col=None):
     st.markdown(f"### 📜 {title}履歴")
     if df.empty:
         st.write("記録はまだありません。")
@@ -156,10 +156,60 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key):
         key=f"{delete_key}_delete_btn",
         type="secondary",
     ):
+        deleted_rows = df.loc[to_delete]
         new_df = df.drop(to_delete)
-        if update_github_data(file_path, new_df, sha, f"Delete {title} Record") in (200, 201):
+        deleted_ok = update_github_data(file_path, new_df, sha, f"Delete {title} Record") in (200, 201)
+
+        stock_reverted = False
+        if deleted_ok and stock_qty_col:
+            now = get_now_jst()
+            new_df_stock = df_stock.copy()
+            log_rows = []
+            for _, row in deleted_rows.iterrows():
+                qty = row.get(stock_qty_col, 0)
+                if not qty:
+                    continue
+                mask = (
+                    (new_df_stock["商品名"] == row["商品名"])
+                    & (new_df_stock["サイズ"] == row["サイズ"])
+                    & (new_df_stock["地名"] == row["地名"])
+                )
+                if mask.any():
+                    idx = new_df_stock[mask].index[0]
+                    new_df_stock.at[idx, "在庫数"] -= qty
+                    new_df_stock.at[idx, "最終更新日"] = now
+                    log_rows.append(
+                        {
+                            "日時": now,
+                            "商品名": row["商品名"],
+                            "サイズ": row["サイズ"],
+                            "地名": row["地名"],
+                            "区分": "削除による戻し",
+                            "数量": -qty,
+                            "在庫数": new_df_stock.at[idx, "在庫数"],
+                            "担当者": row.get("担当者", ""),
+                        }
+                    )
+
+            if log_rows and update_github_data(
+                FILE_PATH_STOCK, new_df_stock, sha_stock, f"Delete {title} Stock Revert"
+            ) in (200, 201):
+                update_github_data(
+                    FILE_PATH_LOG,
+                    pd.concat([df_log, pd.DataFrame(log_rows)], ignore_index=True),
+                    sha_log,
+                    f"Delete {title} Stock Log",
+                )
+                stock_reverted = True
+
+        if deleted_ok:
             st.cache_data.clear()
-            st.success("削除しました")
+            if stock_qty_col and stock_reverted:
+                st.success("削除しました（在庫からも差し引きました）")
+            elif stock_qty_col:
+                st.success("削除しました（在庫マスタに一致しないため在庫は変更していません）")
+            else:
+                st.success("削除しました")
             st.rerun()
 
 
@@ -312,4 +362,5 @@ with col_right:
             ["日時", "商品名", "サイズ", "地名", "製函数", "ミス_フタ", "ミス_身", "担当者"],
             "製函記録",
             "seikan",
+            stock_qty_col="製函数",
         )
