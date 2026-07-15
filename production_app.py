@@ -21,10 +21,24 @@ FILE_PATH_STOCK = "inventory_main.csv"
 FILE_PATH_LOG = "stock_log_main.csv"
 FILE_PATH_HAKUOSHI = "hakuoshi_log.csv"
 FILE_PATH_SEIKAN = "seikan_log.csv"
+FILE_PATH_STAFF = "staff_master.csv"
 
 HAKUOSHI_COLS = ["日時", "商品名", "サイズ", "地名", "枚数", "ミス数", "担当者"]
-SEIKAN_COLS = ["日時", "商品名", "サイズ", "地名", "製函数", "ミス_フタ", "ミス_身", "担当者"]
-USERS = ["佐藤", "中村", "手塚"]
+SEIKAN_COLS = [
+    "日時",
+    "商品名",
+    "サイズ",
+    "地名",
+    "製函数",
+    "ミス_フタ",
+    "ミス_身",
+    "担当者",
+]
+STAFF_COLS = ["区分", "担当者"]
+DEFAULT_USERS = {
+    "箔押し": ["佐藤", "中村"],
+    "製函": ["佐藤", "佐野"],
+}
 
 st.set_page_config(
     page_title="製造記録（箔押し・製函）",
@@ -105,8 +119,12 @@ with st.sidebar:
     st.markdown("### 🔗 クイック移動")
     c1, c2, c3 = st.columns(3)
     c1.link_button("📦 在庫管理", "https://zaiko-kanri.streamlit.app/")
-    c2.link_button("📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app/")
-    c3.link_button("🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/")
+    c2.link_button(
+        "📊 分析画面", "https://zaiko-kanri-f8bgjer2kscsa9ack7ervi.streamlit.app/"
+    )
+    c3.link_button(
+        "🚚 発注管理", "https://zaiko-kanri-qzelakcnxralslk3ac27ex.streamlit.app/"
+    )
     st.divider()
 
     def _calc_apply(a, b, op):
@@ -149,8 +167,13 @@ with st.sidebar:
             st.session_state.calc_new_entry = False
         elif key in ("+", "-", "×", "÷"):
             current = float(st.session_state.calc_display)
-            if st.session_state.calc_prev is not None and not st.session_state.calc_new_entry:
-                result = _calc_apply(st.session_state.calc_prev, current, st.session_state.calc_op)
+            if (
+                st.session_state.calc_prev is not None
+                and not st.session_state.calc_new_entry
+            ):
+                result = _calc_apply(
+                    st.session_state.calc_prev, current, st.session_state.calc_op
+                )
                 st.session_state.calc_display = _calc_fmt(result)
                 st.session_state.calc_prev = None if result != result else result
             else:
@@ -158,9 +181,14 @@ with st.sidebar:
             st.session_state.calc_op = key
             st.session_state.calc_new_entry = True
         elif key == "=":
-            if st.session_state.calc_prev is not None and st.session_state.calc_op is not None:
+            if (
+                st.session_state.calc_prev is not None
+                and st.session_state.calc_op is not None
+            ):
                 current = float(st.session_state.calc_display)
-                result = _calc_apply(st.session_state.calc_prev, current, st.session_state.calc_op)
+                result = _calc_apply(
+                    st.session_state.calc_prev, current, st.session_state.calc_op
+                )
                 st.session_state.calc_display = _calc_fmt(result)
                 st.session_state.calc_prev = None
                 st.session_state.calc_op = None
@@ -195,7 +223,12 @@ with st.sidebar:
     # 「-」「+」単体はStreamlitのMarkdown箇条書き記号と解釈され表示が消えるため、
     # 見た目がほぼ同じ別のUnicode文字（全角プラス／マイナス記号）をボタンラベルに使う
     calc_label_to_op = {"－": "-", "＋": "+"}
-    for row in (["7", "8", "9", "÷"], ["4", "5", "6", "×"], ["1", "2", "3", "－"], ["C", "0", ".", "＋"]):
+    for row in (
+        ["7", "8", "9", "÷"],
+        ["4", "5", "6", "×"],
+        ["1", "2", "3", "－"],
+        ["C", "0", ".", "＋"],
+    ):
         cols = st.columns(4)
         for col, label in zip(cols, row):
             if col.button(label, key=f"calc_btn_{label}", use_container_width=True):
@@ -210,8 +243,74 @@ with st.sidebar:
 # データ読み込み
 df_stock, sha_stock = get_github_data(FILE_PATH_STOCK)
 df_log, sha_log = get_github_data(FILE_PATH_LOG)
-df_hakuoshi, sha_hakuoshi = get_github_data(FILE_PATH_HAKUOSHI, default_cols=HAKUOSHI_COLS)
+df_hakuoshi, sha_hakuoshi = get_github_data(
+    FILE_PATH_HAKUOSHI, default_cols=HAKUOSHI_COLS
+)
 df_seikan, sha_seikan = get_github_data(FILE_PATH_SEIKAN, default_cols=SEIKAN_COLS)
+df_staff, sha_staff = get_github_data(FILE_PATH_STAFF, default_cols=STAFF_COLS)
+
+# マスタ未登録の区分にはデフォルトの担当者を補って表示用に使う（保存はしない）
+_staff_frames = [df_staff]
+for _section, _names in DEFAULT_USERS.items():
+    if not (df_staff["区分"] == _section).any():
+        _staff_frames.append(
+            pd.DataFrame([{"区分": _section, "担当者": n} for n in _names])
+        )
+df_staff = pd.concat(_staff_frames, ignore_index=True)
+
+
+def get_users(section):
+    sub = df_staff[df_staff["区分"] == section]
+    return list(dict.fromkeys(sub["担当者"].tolist()))
+
+
+def staff_manager(section, key_prefix):
+    # st.expanderはこのStreamlitバージョンではstate保持ができず、
+    # 中のセレクトボックスを操作するたびに閉じてしまうため、チェックボックスで開閉を管理する
+    show = st.checkbox(
+        f"👤 担当者を追加・削除する（{section}）", key=f"{key_prefix}_staff_toggle"
+    )
+    if not show:
+        return
+
+    current = get_users(section)
+    new_name = st.text_input("追加する名前", key=f"{key_prefix}_staff_add")
+    if st.button("➕ 追加", key=f"{key_prefix}_staff_add_btn"):
+        name = new_name.strip()
+        if not name:
+            st.warning("名前を入力してください")
+        elif name in current:
+            st.warning("すでに登録されています")
+        else:
+            updated = pd.concat(
+                [df_staff, pd.DataFrame([{"区分": section, "担当者": name}])],
+                ignore_index=True,
+            )
+            if update_github_data(
+                FILE_PATH_STAFF, updated, sha_staff, f"Add Staff ({section})"
+            ) in (200, 201):
+                st.cache_data.clear()
+                st.success("追加しました")
+                st.rerun()
+
+    if current:
+        remove_name = st.selectbox(
+            "削除する名前", current, key=f"{key_prefix}_staff_remove_sel"
+        )
+        if len(current) <= 1:
+            st.caption("※ 最後の1人は削除できません。")
+        elif st.button("🗑 削除", key=f"{key_prefix}_staff_remove_btn"):
+            mask = ~(
+                (df_staff["区分"] == section) & (df_staff["担当者"] == remove_name)
+            )
+            updated = df_staff[mask]
+            if update_github_data(
+                FILE_PATH_STAFF, updated, sha_staff, f"Remove Staff ({section})"
+            ) in (200, 201):
+                st.cache_data.clear()
+                st.success("削除しました")
+                st.rerun()
+
 
 st.title("🏭 製造記録")
 
@@ -228,13 +327,17 @@ def item_picker(key_prefix):
     """商品名→サイズ→地名のカスケード選択。マスタ未登録の組み合わせは手入力に切替可。"""
     item_opts = get_stock_options(df_stock, "商品名")
     manual = st.checkbox(
-        "リストにない組み合わせを入力する", key=f"{key_prefix}_manual", value=not item_opts
+        "リストにない組み合わせを入力する",
+        key=f"{key_prefix}_manual",
+        value=not item_opts,
     )
 
     col1, col2, col3 = st.columns(3)
     if manual or not item_opts:
         if not item_opts:
-            st.info("在庫管理システムにまだ商品が登録されていません。手入力してください。")
+            st.info(
+                "在庫管理システムにまだ商品が登録されていません。手入力してください。"
+            )
         with col1:
             item = st.text_input("商品名", key=f"{key_prefix}_item_manual")
         with col2:
@@ -247,10 +350,22 @@ def item_picker(key_prefix):
             item = st.selectbox("商品名", item_opts, key=f"{key_prefix}_item_sel")
         size_opts = get_stock_options(df_stock, "サイズ", {"商品名": item})
         with col2:
-            size = st.selectbox("サイズ", size_opts, key=f"{key_prefix}_size_sel") if size_opts else ""
-        loc_opts = get_stock_options(df_stock, "地名", {"商品名": item, "サイズ": size}) if size else []
+            size = (
+                st.selectbox("サイズ", size_opts, key=f"{key_prefix}_size_sel")
+                if size_opts
+                else ""
+            )
+        loc_opts = (
+            get_stock_options(df_stock, "地名", {"商品名": item, "サイズ": size})
+            if size
+            else []
+        )
         with col3:
-            loc = st.selectbox("地名", loc_opts, key=f"{key_prefix}_loc_sel") if loc_opts else ""
+            loc = (
+                st.selectbox("地名", loc_opts, key=f"{key_prefix}_loc_sel")
+                if loc_opts
+                else ""
+            )
         matched = bool(item and size and loc)
 
     return item, size, loc, matched
@@ -267,7 +382,9 @@ def today_section(df, qty_cols, title):
     df_show = df_show.dropna(subset=["日時"])
 
     today = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
-    df_today = df_show[df_show["日時"].dt.date == today].sort_values("日時", ascending=False)
+    df_today = df_show[df_show["日時"].dt.date == today].sort_values(
+        "日時", ascending=False
+    )
 
     if df_today.empty:
         st.write("本日の記録はまだありません。")
@@ -283,7 +400,9 @@ def today_section(df, qty_cols, title):
     )
 
 
-def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_col=None):
+def history_section(
+    df, sha, file_path, disp_cols, title, delete_key, stock_qty_col=None
+):
     st.markdown(f"### 📜 {title}履歴")
     if df.empty:
         st.write("記録はまだありません。")
@@ -300,26 +419,38 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_
 
     fc1, fc2 = st.columns(2)
     with fc1:
-        f_item = st.selectbox("商品名", _opts("商品名"), key=f"{delete_key}_filter_item")
+        f_item = st.selectbox(
+            "商品名", _opts("商品名"), key=f"{delete_key}_filter_item"
+        )
     with fc2:
-        f_size = st.selectbox("サイズ", _opts("サイズ"), key=f"{delete_key}_filter_size")
+        f_size = st.selectbox(
+            "サイズ", _opts("サイズ"), key=f"{delete_key}_filter_size"
+        )
     fc3, fc4 = st.columns(2)
     with fc3:
         f_loc = st.selectbox("地名", _opts("地名"), key=f"{delete_key}_filter_loc")
     with fc4:
-        f_user = st.selectbox("担当者", _opts("担当者"), key=f"{delete_key}_filter_user")
+        f_user = st.selectbox(
+            "担当者", _opts("担当者"), key=f"{delete_key}_filter_user"
+        )
 
     min_date = df_show["日時"].min().date()
     max_date = df_show["日時"].max().date()
     fd1, fd2 = st.columns(2)
     with fd1:
         f_start = st.date_input(
-            "開始日", value=min_date, min_value=min_date, max_value=max_date,
+            "開始日",
+            value=min_date,
+            min_value=min_date,
+            max_value=max_date,
             key=f"{delete_key}_filter_start",
         )
     with fd2:
         f_end = st.date_input(
-            "終了日", value=max_date, min_value=min_date, max_value=max_date,
+            "終了日",
+            value=max_date,
+            min_value=min_date,
+            max_value=max_date,
             key=f"{delete_key}_filter_end",
         )
 
@@ -344,7 +475,9 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_
         hide_index=True,
         use_container_width=True,
         disabled=disp_cols,
-        column_config={"日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm")},
+        column_config={
+            "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm")
+        },
         key=f"{delete_key}_editor",
     )
 
@@ -356,7 +489,9 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_
     ):
         deleted_rows = df.loc[to_delete]
         new_df = df.drop(to_delete)
-        deleted_ok = update_github_data(file_path, new_df, sha, f"Delete {title} Record") in (200, 201)
+        deleted_ok = update_github_data(
+            file_path, new_df, sha, f"Delete {title} Record"
+        ) in (200, 201)
 
         stock_reverted = False
         if deleted_ok and stock_qty_col:
@@ -405,7 +540,9 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_
             if stock_qty_col and stock_reverted:
                 st.success("削除しました（在庫からも差し引きました）")
             elif stock_qty_col:
-                st.success("削除しました（在庫マスタに一致しないため在庫は変更していません）")
+                st.success(
+                    "削除しました（在庫マスタに一致しないため在庫は変更していません）"
+                )
             else:
                 st.success("削除しました")
             st.rerun()
@@ -427,9 +564,16 @@ with tab_hakuoshi:
         with col5:
             h_miss = st.number_input("ミス数", min_value=0, value=0, key="h_miss")
         with col6:
-            h_user = st.selectbox("担当者", USERS, key="h_user")
+            h_user = st.selectbox("担当者", get_users("箔押し"), key="h_user")
 
-        if st.button("✅ 箔押し記録を登録", type="primary", use_container_width=True, key="h_submit"):
+        staff_manager("箔押し", "h")
+
+        if st.button(
+            "✅ 箔押し記録を登録",
+            type="primary",
+            use_container_width=True,
+            key="h_submit",
+        ):
             if h_item and h_size and h_loc:
                 new_row = pd.DataFrame(
                     [
@@ -477,16 +621,29 @@ with tab_seikan:
         with col7:
             s_qty = st.number_input("製函数（c/s）", min_value=0, value=0, key="s_qty")
         with col8:
-            s_miss_futa = st.number_input("ミス数（フタ）", min_value=0, value=0, key="s_miss_futa")
+            s_miss_futa = st.number_input(
+                "ミス数（フタ）", min_value=0, value=0, key="s_miss_futa"
+            )
         with col9:
-            s_miss_mi = st.number_input("ミス数（身）", min_value=0, value=0, key="s_miss_mi")
+            s_miss_mi = st.number_input(
+                "ミス数（身）", min_value=0, value=0, key="s_miss_mi"
+            )
         with col10:
-            s_user = st.selectbox("担当者", USERS, key="s_user")
+            s_user = st.selectbox("担当者", get_users("製函"), key="s_user")
+
+        staff_manager("製函", "s")
 
         if not s_matched:
-            st.caption("※ 在庫マスタに一致する商品が無いため、在庫数への反映はスキップされます。")
+            st.caption(
+                "※ 在庫マスタに一致する商品が無いため、在庫数への反映はスキップされます。"
+            )
 
-        if st.button("✅ 製函記録を登録", type="primary", use_container_width=True, key="s_submit"):
+        if st.button(
+            "✅ 製函記録を登録",
+            type="primary",
+            use_container_width=True,
+            key="s_submit",
+        ):
             if s_item and s_size and s_loc:
                 now = get_now_jst()
                 new_row = pd.DataFrame(
@@ -563,7 +720,16 @@ with tab_seikan:
             df_seikan,
             sha_seikan,
             FILE_PATH_SEIKAN,
-            ["日時", "商品名", "サイズ", "地名", "製函数", "ミス_フタ", "ミス_身", "担当者"],
+            [
+                "日時",
+                "商品名",
+                "サイズ",
+                "地名",
+                "製函数",
+                "ミス_フタ",
+                "ミス_身",
+                "担当者",
+            ],
             "製函記録",
             "seikan",
             stock_qty_col="製函数",
