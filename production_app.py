@@ -88,6 +88,13 @@ st.markdown(
         color: var(--note-ink) !important;
     }
 
+    /* タブは常に明るい背景（--note-desk）の上に乗るので、テーマに関係なく文字色を固定する */
+    [data-testid="stTab"] p,
+    [data-testid="stTab"] [data-testid="stMarkdownContainer"] {
+        color: var(--note-ink) !important;
+        font-family: 'Klee One', sans-serif !important;
+    }
+
     hr { border: none; border-top: 2px dashed var(--note-border); }
     </style>
     """,
@@ -406,10 +413,10 @@ def history_section(df, sha, file_path, disp_cols, title, delete_key, stock_qty_
 
 PANEL_HEIGHT = 850
 
-col_left, col_right = st.columns(2)
+tab_hakuoshi, tab_seikan = st.tabs(["🖨 箔押し記録", "📦 製函記録"])
 
-# --- 左側: 箔押し記録 ---
-with col_left:
+# --- 箔押し記録 ---
+with tab_hakuoshi:
     with st.container(height=PANEL_HEIGHT, border=True):
         st.subheader("🖨 箔押し記録の登録")
         h_item, h_size, h_loc, _ = item_picker("h")
@@ -460,8 +467,8 @@ with col_left:
             "hakuoshi",
         )
 
-# --- 右側: 製函記録 ---
-with col_right:
+# --- 製函記録 ---
+with tab_seikan:
     with st.container(height=PANEL_HEIGHT, border=True):
         st.subheader("📦 製函記録の登録")
         s_item, s_size, s_loc, s_matched = item_picker("s")
