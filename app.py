@@ -276,6 +276,7 @@ if selected_indices:
         with cc2:
             is_res = bulk_type == "予約出庫"
             tomorrow = dt.date.today() + dt.timedelta(days=1)
+            entry_date = dt.date.today()
 
             if is_res:
                 if "res_dates_list" not in st.session_state:
@@ -318,7 +319,12 @@ if selected_indices:
                         "※上のカレンダーで日付を選んで、[➕ 追加] を押してください。"
                     )
             else:
-                st.date_input("共通の予約日", value=tomorrow, disabled=True)
+                entry_date = st.date_input(
+                    "処理日（過去日付も指定可）",
+                    value=dt.date.today(),
+                    max_value=dt.date.today(),
+                    key="entry_date_input",
+                )
 
         with cc3:
             user_name = st.selectbox("担当者", ["-- 選択 --"] + USERS)
@@ -437,6 +443,10 @@ if selected_indices:
                     new_logs = []
                     new_reservations = df_res_all.copy()
                     now = get_now_jst()
+                    entry_datetime = dt.datetime.combine(
+                        entry_date,
+                        dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).time(),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
 
                     for idx, p in update_payload.items():
                         row = p["orig_data"]
@@ -479,11 +489,11 @@ if selected_indices:
 
                                 new_df_stock.at[target_idx, "地名"] = p["loc"]
                                 new_df_stock.at[target_idx, "アラート基準"] = p["alert"]
-                                new_df_stock.at[target_idx, "最終更新日"] = now
+                                new_df_stock.at[target_idx, "最終更新日"] = entry_datetime
 
                                 new_logs.append(
                                     {
-                                        "日時": now,
+                                        "日時": entry_datetime,
                                         "商品名": row["商品名"],
                                         "サイズ": row["サイズ"],
                                         "地名": p["loc"],
@@ -713,7 +723,7 @@ if not df_log.empty:
     if selected_types:
         df_log_filtered = df_log_filtered[df_log_filtered["区分"].isin(selected_types)]
 
-    # 3. 履歴の表示
+    # 3. 履歴の表示（日時のみ編集可能）
     disp_log_cols = [
         "日時",
         "商品名",
@@ -724,13 +734,35 @@ if not df_log.empty:
         "在庫数",
         "担当者",
     ]
-    st.dataframe(
-        df_log_filtered[disp_log_cols].sort_values("日時", ascending=False),
+    log_view = df_log_filtered[disp_log_cols].sort_values("日時", ascending=False)
+    st.caption("✏️ 「日時」列はダブルクリックで直接編集できます。")
+    edited_log = st.data_editor(
+        log_view,
         use_container_width=True,
         hide_index=True,
+        disabled=["商品名", "サイズ", "地名", "区分", "数量", "在庫数", "担当者"],
         column_config={
             "日時": st.column_config.DatetimeColumn("日時", format="YYYY-MM-DD HH:mm"),
             "数量": st.column_config.NumberColumn("数", format="%d"),
             "在庫数": st.column_config.NumberColumn("現在庫", format="%d"),
         },
+        key="log_editor",
     )
+
+    if st.button("💾 履歴の日時変更を保存する", use_container_width=True):
+        changed_mask = edited_log["日時"] != log_view["日時"]
+        if changed_mask.any():
+            new_df_log = df_log.copy()
+            for idx in edited_log[changed_mask].index:
+                new_df_log.at[idx, "日時"] = edited_log.at[idx, "日時"]
+            new_df_log["日時"] = pd.to_datetime(new_df_log["日時"]).dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            if update_github_data(
+                FILE_PATH_LOG, new_df_log, sha_log, "履歴日時を編集"
+            ) in (200, 201):
+                st.cache_data.clear()
+                st.success("履歴の日時を更新しました")
+                st.rerun()
+        else:
+            st.info("変更はありません")
