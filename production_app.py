@@ -60,16 +60,21 @@ st.markdown(
         --note-border: #bfe0ef;
         --note-ink: #22384a;
         /* 箔押しタブ（暖色・金箔をイメージ） */
-        --note-paper-h: #fdf6e8;
-        --note-rule-h: #ead9b0;
-        --note-border-h: #e0c98f;
+        --note-desk-h: #fbead2;
         /* 製函タブ（寒色・段ボールの青みをイメージ） */
-        --note-paper-s: #eef5fb;
-        --note-rule-s: #bfe0f2;
-        --note-border-s: #bfe0ef;
+        --note-desk-s: #eaf4fb;
     }
 
     [data-testid="stAppViewContainer"] { background: var(--note-desk); }
+
+    /* 箔押しタブ（1つ目）と製函タブ（2つ目）でページ背景の色味を少し変える。
+       紙自体（--note-paper）は白のまま。表示中のタブパネルには hidden 属性が付かないことを利用する */
+    [data-testid="stAppViewContainer"]:has([id$="-tabpanel-0"]:not([hidden])) {
+        background: var(--note-desk-h) !important;
+    }
+    [data-testid="stAppViewContainer"]:has([id$="-tabpanel-1"]:not([hidden])) {
+        background: var(--note-desk-s) !important;
+    }
 
     [data-testid="stSidebar"] {
         background: var(--note-cover);
@@ -90,22 +95,6 @@ st.markdown(
         border-radius: 10px !important;
         box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.12);
         color: var(--note-ink);
-    }
-
-    /* 箔押しタブ（1つ目）と製函タブ（2つ目）で紙の色味を少し変える */
-    [id$="-tabpanel-0"] [data-testid="stLayoutWrapper"][height="850px"] {
-        background-color: var(--note-paper-h);
-        background-image: repeating-linear-gradient(
-            transparent 0px, transparent 31px, var(--note-rule-h) 32px
-        );
-        border-color: var(--note-border-h) !important;
-    }
-    [id$="-tabpanel-1"] [data-testid="stLayoutWrapper"][height="850px"] {
-        background-color: var(--note-paper-s);
-        background-image: repeating-linear-gradient(
-            transparent 0px, transparent 31px, var(--note-rule-s) 32px
-        );
-        border-color: var(--note-border-s) !important;
     }
 
     /* パネル・サイドバーは常に明色固定の背景なので、OSのダークテーマでも文字色を強制的に読める色にする。
