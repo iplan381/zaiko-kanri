@@ -59,6 +59,14 @@ st.markdown(
         --note-rule: #bfe0f2;
         --note-border: #bfe0ef;
         --note-ink: #22384a;
+        /* 箔押しタブ（暖色・金箔をイメージ） */
+        --note-paper-h: #fdf6e8;
+        --note-rule-h: #ead9b0;
+        --note-border-h: #e0c98f;
+        /* 製函タブ（寒色・段ボールの青みをイメージ） */
+        --note-paper-s: #eef5fb;
+        --note-rule-s: #bfe0f2;
+        --note-border-s: #bfe0ef;
     }
 
     [data-testid="stAppViewContainer"] { background: var(--note-desk); }
@@ -82,6 +90,22 @@ st.markdown(
         border-radius: 10px !important;
         box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.12);
         color: var(--note-ink);
+    }
+
+    /* 箔押しタブ（1つ目）と製函タブ（2つ目）で紙の色味を少し変える */
+    [id$="-tabpanel-0"] [data-testid="stLayoutWrapper"][height="850px"] {
+        background-color: var(--note-paper-h);
+        background-image: repeating-linear-gradient(
+            transparent 0px, transparent 31px, var(--note-rule-h) 32px
+        );
+        border-color: var(--note-border-h) !important;
+    }
+    [id$="-tabpanel-1"] [data-testid="stLayoutWrapper"][height="850px"] {
+        background-color: var(--note-paper-s);
+        background-image: repeating-linear-gradient(
+            transparent 0px, transparent 31px, var(--note-rule-s) 32px
+        );
+        border-color: var(--note-border-s) !important;
     }
 
     /* パネル・サイドバーは常に明色固定の背景なので、OSのダークテーマでも文字色を強制的に読める色にする。
