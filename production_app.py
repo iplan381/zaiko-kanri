@@ -347,11 +347,23 @@ def item_picker(key_prefix):
         matched = False
     else:
         with col1:
-            item = st.selectbox("商品名", item_opts, key=f"{key_prefix}_item_sel")
-        size_opts = get_stock_options(df_stock, "サイズ", {"商品名": item})
+            item = st.selectbox(
+                "商品名",
+                item_opts,
+                index=None,
+                placeholder="選択してください",
+                key=f"{key_prefix}_item_sel",
+            )
+        size_opts = get_stock_options(df_stock, "サイズ", {"商品名": item}) if item else []
         with col2:
             size = (
-                st.selectbox("サイズ", size_opts, key=f"{key_prefix}_size_sel")
+                st.selectbox(
+                    "サイズ",
+                    size_opts,
+                    index=None,
+                    placeholder="選択してください",
+                    key=f"{key_prefix}_size_sel",
+                )
                 if size_opts
                 else ""
             )
@@ -362,7 +374,13 @@ def item_picker(key_prefix):
         )
         with col3:
             loc = (
-                st.selectbox("地名", loc_opts, key=f"{key_prefix}_loc_sel")
+                st.selectbox(
+                    "地名",
+                    loc_opts,
+                    index=None,
+                    placeholder="選択してください",
+                    key=f"{key_prefix}_loc_sel",
+                )
                 if loc_opts
                 else ""
             )
@@ -564,7 +582,13 @@ with tab_hakuoshi:
         with col5:
             h_miss = st.number_input("ミス数", min_value=0, value=0, key="h_miss")
         with col6:
-            h_user = st.selectbox("担当者", get_users("箔押し"), key="h_user")
+            h_user = st.selectbox(
+                "担当者",
+                get_users("箔押し"),
+                index=None,
+                placeholder="選択してください",
+                key="h_user",
+            )
 
         staff_manager("箔押し", "h")
 
@@ -574,7 +598,7 @@ with tab_hakuoshi:
             use_container_width=True,
             key="h_submit",
         ):
-            if h_item and h_size and h_loc:
+            if h_item and h_size and h_loc and h_user:
                 new_row = pd.DataFrame(
                     [
                         {
@@ -596,7 +620,7 @@ with tab_hakuoshi:
                     st.success("登録しました")
                     st.rerun()
             else:
-                st.error("商品名・サイズ・地名を入力してください")
+                st.error("商品名・サイズ・地名・担当者を選択してください")
 
         st.divider()
         today_section(df_hakuoshi, ["枚数", "ミス数"], "箔押し記録")
@@ -629,7 +653,13 @@ with tab_seikan:
                 "ミス数（身）", min_value=0, value=0, key="s_miss_mi"
             )
         with col10:
-            s_user = st.selectbox("担当者", get_users("製函"), key="s_user")
+            s_user = st.selectbox(
+                "担当者",
+                get_users("製函"),
+                index=None,
+                placeholder="選択してください",
+                key="s_user",
+            )
 
         staff_manager("製函", "s")
 
@@ -644,7 +674,7 @@ with tab_seikan:
             use_container_width=True,
             key="s_submit",
         ):
-            if s_item and s_size and s_loc:
+            if s_item and s_size and s_loc and s_user:
                 now = get_now_jst()
                 new_row = pd.DataFrame(
                     [
@@ -710,7 +740,7 @@ with tab_seikan:
                         st.success("登録しました（在庫への反映はスキップされました）")
                     st.rerun()
             else:
-                st.error("商品名・サイズ・地名を入力してください")
+                st.error("商品名・サイズ・地名・担当者を選択してください")
 
         st.divider()
         today_section(df_seikan, ["製函数", "ミス_フタ", "ミス_身"], "製函記録")
