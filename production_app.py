@@ -69,13 +69,6 @@ st.markdown(
 
     /* 箔押しタブ（1つ目）と製函タブ（2つ目）でページ背景の色味を少し変える。
        紙自体（--note-paper）は白のまま。表示中のタブパネルには hidden 属性が付かないことを利用する */
-    [data-testid="stAppViewContainer"]:has([id$="-tabpanel-0"]:not([hidden])) {
-        background: var(--note-desk-h) !important;
-    }
-    [data-testid="stAppViewContainer"]:has([id$="-tabpanel-1"]:not([hidden])) {
-        background: var(--note-desk-s) !important;
-    }
-
     [data-testid="stSidebar"] {
         background: var(--note-cover);
         border-right: 1px solid var(--note-border);
@@ -115,10 +108,8 @@ st.markdown(
         color: var(--note-ink) !important;
     }
 
-    /* タブは常に明るい背景（--note-desk）の上に乗るので、テーマに関係なく文字色を固定する */
-    [data-testid="stTab"] p,
-    [data-testid="stTab"] [data-testid="stMarkdownContainer"] {
-        color: var(--note-ink) !important;
+    /* 箔押し/製函の切り替えボタン。配色はStreamlit標準のまま、フォントだけノート風にする */
+    [data-testid^="stBaseButton-segmented_control"] p {
         font-family: 'Klee One', sans-serif !important;
     }
 
@@ -581,10 +572,36 @@ def history_section(
 
 PANEL_HEIGHT = 850
 
-tab_hakuoshi, tab_seikan = st.tabs(["🖨 箔押し記録", "📦 製函記録"])
+SECTION_HAKUOSHI = "🖨 箔押し記録"
+SECTION_SEIKAN = "📦 製函記録"
+
+# st.tabsは入力のたびに1つ目のタブへ戻ってしまう（アクティブ状態が保持されない）ため、
+# keyで状態を保持できるsegmented_controlをタブ代わりに使う
+active_section = st.segmented_control(
+    "記録を選択",
+    [SECTION_HAKUOSHI, SECTION_SEIKAN],
+    default=SECTION_HAKUOSHI,
+    key="active_section",
+    label_visibility="collapsed",
+)
+if active_section is None:
+    # segmented_controlは選択中の項目を再タップすると解除されてしまうため、
+    # 何も選ばれていない状態にはせず箔押しに戻す
+    active_section = SECTION_HAKUOSHI
+
+st.markdown(
+    f"""
+    <style>
+    [data-testid="stAppViewContainer"] {{
+        background: {"var(--note-desk-h)" if active_section == SECTION_HAKUOSHI else "var(--note-desk-s)"} !important;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --- 箔押し記録 ---
-with tab_hakuoshi:
+if active_section == SECTION_HAKUOSHI:
     with st.container(height=PANEL_HEIGHT, border=True):
         st.subheader("🖨 箔押し記録の登録")
         h_item, h_size, h_loc, _ = item_picker("h")
@@ -653,7 +670,7 @@ with tab_hakuoshi:
         )
 
 # --- 製函記録 ---
-with tab_seikan:
+elif active_section == SECTION_SEIKAN:
     with st.container(height=PANEL_HEIGHT, border=True):
         st.subheader("📦 製函記録の登録")
         s_item, s_size, s_loc, s_matched = item_picker("s")
