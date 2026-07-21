@@ -589,28 +589,32 @@ with tab_hakuoshi:
         st.subheader("🖨 箔押し記録の登録")
         h_item, h_size, h_loc, _ = item_picker("h")
 
-        col4, col5, col6 = st.columns(3)
-        with col4:
-            h_qty = st.number_input("箔押し枚数", min_value=0, value=0, key="h_qty")
-        with col5:
-            h_miss = st.number_input("ミス数", min_value=0, value=0, key="h_miss")
-        with col6:
-            h_user = st.selectbox(
-                "担当者",
-                get_users("箔押し"),
-                index=None,
-                placeholder="選択してください",
-                key="h_user",
+        # 数量・担当者・登録ボタンはフォームにまとめ、入力のたびに画面全体が
+        # 再描画される（スクロール位置が飛ぶ）のを防ぎ、登録ボタンを押した時だけ確定させる
+        with st.form("h_form", border=False):
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                h_qty = st.number_input("箔押し枚数", min_value=0, value=0, key="h_qty")
+            with col5:
+                h_miss = st.number_input("ミス数", min_value=0, value=0, key="h_miss")
+            with col6:
+                h_user = st.selectbox(
+                    "担当者",
+                    get_users("箔押し"),
+                    index=None,
+                    placeholder="選択してください",
+                    key="h_user",
+                )
+
+            h_submitted = st.form_submit_button(
+                "✅ 箔押し記録を登録",
+                type="primary",
+                use_container_width=True,
             )
 
         staff_manager("箔押し", "h")
 
-        if st.button(
-            "✅ 箔押し記録を登録",
-            type="primary",
-            use_container_width=True,
-            key="h_submit",
-        ):
+        if h_submitted:
             if h_item and h_size and h_loc and h_user:
                 new_row = pd.DataFrame(
                     [
@@ -654,39 +658,45 @@ with tab_seikan:
         st.subheader("📦 製函記録の登録")
         s_item, s_size, s_loc, s_matched = item_picker("s")
 
-        col7, col8, col9, col10 = st.columns(4)
-        with col7:
-            s_qty = st.number_input("製函数（c/s）", min_value=0, value=0, key="s_qty")
-        with col8:
-            s_miss_futa = st.number_input(
-                "ミス数（フタ）", min_value=0, value=0, key="s_miss_futa"
-            )
-        with col9:
-            s_miss_mi = st.number_input(
-                "ミス数（身）", min_value=0, value=0, key="s_miss_mi"
-            )
-        with col10:
-            s_user = st.selectbox(
-                "担当者",
-                get_users("製函"),
-                index=None,
-                placeholder="選択してください",
-                key="s_user",
+        # 数量・担当者・登録ボタンはフォームにまとめ、入力のたびに画面全体が
+        # 再描画される（スクロール位置が飛ぶ）のを防ぎ、登録ボタンを押した時だけ確定させる
+        with st.form("s_form", border=False):
+            col7, col8, col9, col10 = st.columns(4)
+            with col7:
+                s_qty = st.number_input(
+                    "製函数（c/s）", min_value=0, value=0, key="s_qty"
+                )
+            with col8:
+                s_miss_futa = st.number_input(
+                    "ミス数（フタ）", min_value=0, value=0, key="s_miss_futa"
+                )
+            with col9:
+                s_miss_mi = st.number_input(
+                    "ミス数（身）", min_value=0, value=0, key="s_miss_mi"
+                )
+            with col10:
+                s_user = st.selectbox(
+                    "担当者",
+                    get_users("製函"),
+                    index=None,
+                    placeholder="選択してください",
+                    key="s_user",
+                )
+
+            if not s_matched:
+                st.caption(
+                    "※ 在庫マスタに一致する商品が無いため、在庫数への反映はスキップされます。"
+                )
+
+            s_submitted = st.form_submit_button(
+                "✅ 製函記録を登録",
+                type="primary",
+                use_container_width=True,
             )
 
         staff_manager("製函", "s")
 
-        if not s_matched:
-            st.caption(
-                "※ 在庫マスタに一致する商品が無いため、在庫数への反映はスキップされます。"
-            )
-
-        if st.button(
-            "✅ 製函記録を登録",
-            type="primary",
-            use_container_width=True,
-            key="s_submit",
-        ):
+        if s_submitted:
             if s_item and s_size and s_loc and s_user:
                 now = get_now_jst()
                 new_row = pd.DataFrame(
